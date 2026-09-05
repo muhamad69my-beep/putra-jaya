@@ -9,7 +9,7 @@
 <link href="./icon-192.png" rel="icon" sizes="192x192" type="image/png"/>
 <link href="./icon-512.png" rel="icon" sizes="512x512" type="image/png"/>
 <link href="./icon.png" rel="apple-touch-icon"/>
-<meta content="#102a56" name="theme-color"/>
+<meta content="#1976F3" name="theme-color"/>
 <style id="pj-startup-render-gate">
 /* PUTRAJAYA 2 — STARTUP RENDER GATE
    Mencegah UI master lama terlihat sesaat sebelum UI final selesai dipasang.
@@ -3784,19 +3784,36 @@ if(!LOGIN_ENABLED){
   window.applyAppUpdate=function(){
     var el=document.getElementById('updateOverlay');
     if(el)el.classList.remove('show');
+    if(waitingWorker){
+      waitingWorker.postMessage('skipWaiting');
+    }else{
+      window.location.reload();
+    }
   };
-  // CATATAN: Pendaftaran Service Worker (./sw.js) DIMATIKAN dengan sengaja.
-  // Aplikasi ini dibungkus sebagai APK Android yang sudah menangani pengambilan
-  // & tampilan HTML-nya sendiri lewat WebView, jadi Service Worker tidak diperlukan.
-  // Service Worker versi lama yang tersimpan di beberapa HP menunjuk ke nama file
-  // HTML lama (PUTRAJAYA2_v79.html) sehingga menyebabkan halaman "404: Not Found"
-  // saat aplikasi di-refresh/reload. Jika sebelumnya sempat ada Service Worker aktif
-  // dari versi lama, ia akan otomatis berhenti mengontrol halaman ini (tidak didaftarkan
-  // ulang) dan tidak akan mengganggu reload berikutnya.
-  if('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations){
-    navigator.serviceWorker.getRegistrations().then(function(regs){
-      regs.forEach(function(r){ r.unregister().catch(function(){}); });
-    }).catch(function(){});
+  // CATATAN: Service Worker (./sw.js) DIAKTIFKAN untuk versi web (GitHub Pages).
+  // Hanya menyimpan file "kerangka" app (index.html, manifest.json, ikon) secara lokal
+  // di HP, supaya saat tidak ada internet, halaman tetap terbuka dan menampilkan
+  // layar "Tidak ada koneksi" milik aplikasi sendiri (bukan halaman offline bawaan
+  // browser). Data transaksi TIDAK ikut disimpan di sini — tetap selalu diambil
+  // langsung dari Supabase setiap kali online, jadi datanya tetap real-time.
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').then(function(reg){
+        if(reg.waiting) showUpdatePrompt(reg);
+        reg.addEventListener('updatefound', function(){
+          var newWorker=reg.installing;
+          if(!newWorker) return;
+          newWorker.addEventListener('statechange', function(){
+            if(newWorker.state==='installed' && navigator.serviceWorker.controller){
+              showUpdatePrompt(reg);
+            }
+          });
+        });
+      }).catch(function(){});
+    });
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      window.location.reload();
+    });
   }
 })();
 </script>
