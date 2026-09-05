@@ -1,180 +1,56 @@
 name: Build APK
-
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    env:
+      BUBBLEWRAP_KEYSTORE_PASSWORD: putrajaya123
+      BUBBLEWRAP_KEY_PASSWORD: putrajaya123
     steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - uses: android-actions/setup-android@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Install Expect
+          node-version: 18
+      - name: Install tools
         run: |
-          sudo apt-get update
+          sudo apt-get update -y
           sudo apt-get install -y expect
-
-      - name: Install Bubblewrap
-        run: |
           npm install -g @bubblewrap/cli
-          bubblewrap --version
-
+      - name: Configure JDK/SDK paths
+        run: |
+          bubblewrap updateConfig --jdkPath="$JAVA_HOME" --androidSdkPath="$ANDROID_HOME"
       - name: Init project
         run: |
-          rm -rf app-build
-
-          expect -c '
+          cat > init.exp << 'EOF'
           set timeout 900
-
           spawn bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory=app-build
-
           expect {
-            -re "Do you want Bubblewrap to install the JDK" {
-              send "n\r"
-              exp_continue
-            }
-
-            -re {\(Y/n\)} {
-              send "\r"
-              exp_continue
-            }
-
-            -re {\(y/N\)} {
-              send "y\r"
-              exp_continue
-            }
-
-            -re "Application name" {
-              send "\r"
-              exp_continue
-            }
-
-            -re "Short name" {
-              send "\r"
-              exp_continue
-            }
-
-            -re "Package ID" {
-              send "\r"
-              exp_continue
-            }
-
-            -re "Full name" {
-              send "PUTRAJAYA\r"
-              exp_continue
-            }
-
-            -re "Organization" {
-              send "PUTRAJAYA\r"
-              exp_continue
-            }
-
-            -re "Country code" {
-              send "ID\r"
-              exp_continue
-            }
-
-            -re "Password" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
-            -re "Confirm" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
+            -re {\(Y/n\)} { send "\r"; exp_continue }
+            -re {\(y/N\)} { send "y\r"; exp_continue }
+            -re "Application name" { send "\r"; exp_continue }
+            -re "Short name" { send "\r"; exp_continue }
+            -re "Package ID" { send "\r"; exp_continue }
+            -re "Full name" { send "PUTRAJAYA\r"; exp_continue }
+            -re "Organization" { send "PUTRAJAYA\r"; exp_continue }
+            -re "Country code" { send "ID\r"; exp_continue }
+            -re "Password" { send "putrajaya123\r"; exp_continue }
+            -re "Confirm" { send "putrajaya123\r"; exp_continue }
             eof
-          }'
-
+          }
+          EOF
+          expect init.exp
       - name: Build APK
         run: |
           cd app-build
-
-          expect -c '
-          set timeout 900
-
-          spawn bubblewrap build --skipPwaValidation
-
-          expect {
-            -re {\(Y/n\)} {
-              send "\r"
-              exp_continue
-            }
-
-            -re {\(y/N\)} {
-              send "y\r"
-              exp_continue
-            }
-
-            -re "Password" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
-            -re "Confirm" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
-            eof
-          }'
-
-      - name: Cari APK
-        run: |
-          echo "======================================"
-          echo "MENCARI SEMUA FILE APK"
-          echo "======================================"
-
-          find . -type f -iname "*.apk" -print
-
-      - name: Siapkan APK
-        run: |
-          APK=$(find . -type f -iname "*.apk" | head -n 1)
-
-          if [ -z "$APK" ]; then
-            echo "======================================"
-            echo "ERROR: APK TIDAK DITEMUKAN"
-            echo "======================================"
-            exit 1
-          fi
-
-          echo "APK ditemukan:"
-          echo "$APK"
-
-          mkdir -p apk-output
-
-          cp "$APK" apk-output/putra-jaya.apk
-
-          echo "======================================"
-          echo "APK SIAP DIUPLOAD"
-          echo "======================================"
-
-          ls -lh apk-output/putra-jaya.apk
-
+          bubblewrap build --skipPwaValidation
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: putra-jaya-apk
-          path: apk-output/putra-jaya.apk
-          if-no-files-found: error
+          path: app-build/app-release-signed.apk
