@@ -19,7 +19,21 @@ html.pj-startup-pending body #app,
 html.pj-startup-pending body #mainNav,
 html.pj-startup-pending body #bottomNav,
 html.pj-startup-pending body .putra-footer{visibility:hidden!important}
-html.pj-startup-pending body{background:#FFFFFF}
+html.pj-startup-pending body{background:#102a56}
+#pjStartupLoader{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#102a56,#14284b);gap:16px}
+html.pj-startup-ready #pjStartupLoader{display:none}
+#pjStartupLoader .pj-load-title{color:#ffffff;font-family:Arial,sans-serif;font-weight:800;font-size:19px;letter-spacing:.02em}
+#pjStartupLoader .pj-load-sub{color:#ffffff99;font-family:Arial,sans-serif;font-size:13px}
+#pjStartupLoader .pj-spinner{width:46px;height:46px;border-radius:50%;border:3px solid #ffffff33;border-top-color:#ffffff;animation:pjspin .8s linear infinite}
+@keyframes pjspin{to{transform:rotate(360deg)}}
+#pjOfflineBanner{position:fixed;inset:0;z-index:9998;background:linear-gradient(180deg,#102a56,#14284b);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:Arial,sans-serif;text-align:center;padding:20px}
+#pjOfflineBanner.show{display:flex}
+#pjOfflineBanner .pj-off-icon{width:76px;height:76px;border-radius:20px;background:#ffffff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#pjOfflineBanner .pj-off-icon svg{width:38px;height:38px}
+#pjOfflineBanner .pj-off-wifi{width:34px;height:34px;color:#ffffff}
+#pjOfflineBanner .pj-off-title{color:#ffffff;font-weight:800;font-size:19px}
+#pjOfflineBanner .pj-off-sub{color:#ffffff99;font-size:13px}
+#pjOfflineBanner .pj-off-btn{margin-top:6px;background:#ffffff;color:#102a56;border:0;border-radius:30px;padding:12px 28px;font-weight:800;font-size:14px;cursor:pointer}
 </style>
 <script id="pj-startup-render-gate-js">
 document.documentElement.classList.add('pj-startup-pending');
@@ -1357,6 +1371,45 @@ html body #app .pj-omset-payment .value{
 </style>
 </head>
 <body>
+<div id="pjStartupLoader"><div class="pj-spinner"></div><div class="pj-load-title">PUTRAJAYA 2</div><div class="pj-load-sub">Memuat aplikasi…</div></div>
+<div id="pjOfflineBanner">
+  <div class="pj-off-icon"><svg fill="none" stroke="#102a56" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"></path></svg></div>
+  <svg class="pj-off-wifi" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"></line><path d="M8.5 16.5a5 5 0 0 1 7 0"></path><path d="M5 12.9a10 10 0 0 1 5.17-2.69"></path><path d="M19 12.9a10 10 0 0 0-2.7-2.16"></path><path d="M2 8.8a15 15 0 0 1 4.17-2.65"></path><path d="M22 8.8a15 15 0 0 0-11.29-3.75"></path><line x1="12" x2="12.01" y1="20" y2="20"></line></svg>
+  <div class="pj-off-title">Tidak ada koneksi</div>
+  <div class="pj-off-sub">Periksa jaringan lalu coba lagi</div>
+  <button class="pj-off-btn" onclick="window.pjCheckConnection&&window.pjCheckConnection()">Coba lagi</button>
+</div>
+<script>
+(function(){
+  var HEALTH_URL='https://wdvgueloiqulgexmecps.supabase.co/auth/v1/health';
+  var checking=false;
+  function setOffline(isOffline){
+    var el=document.getElementById('pjOfflineBanner');
+    if(!el)return;
+    if(isOffline)el.classList.add('show');else el.classList.remove('show');
+  }
+  async function checkRealConnection(){
+    if(checking)return;
+    checking=true;
+    try{
+      if(!navigator.onLine)throw new Error('no-network-interface');
+      const ctrl=new AbortController();
+      const t=setTimeout(()=>ctrl.abort(),4000);
+      await fetch(HEALTH_URL+'?_='+Date.now(),{method:'GET',cache:'no-store',signal:ctrl.signal});
+      clearTimeout(t);
+      setOffline(false);
+    }catch(e){
+      setOffline(true);
+    }finally{checking=false;}
+  }
+  window.pjCheckConnection=checkRealConnection;
+  window.addEventListener('online',checkRealConnection);
+  window.addEventListener('offline',()=>setOffline(true));
+  document.addEventListener('DOMContentLoaded',checkRealConnection);
+  checkRealConnection();
+  setInterval(checkRealConnection,8000);
+})();
+</script>
 <header><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><h1 id="mainStoreTitle">PUTRAJAYA 2</h1><div class="sub">Stok • Modal • Laporan</div></div><div class="userbar"><button class="pj-notif-bell role-sensitive" id="notifBellBtn" onclick="openNotifPanel()" title="Pesan Masuk" type="button"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="pj-notif-badge" id="notifBadge" style="display:none"></span></button><button class="role" id="userRole" onclick="page('akunSaya')" title="Akun" type="button"></button></div></div></header>
 <main id="app"></main>
 <div class="nav" id="mainNav">
@@ -1748,6 +1801,23 @@ async function apiUpsert(table,rows){
   const r=await fetch(SUPABASE_URL+'/rest/v1/'+table,{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
   if(!r.ok)throw new Error(await r.text());
 }
+async function apiDelete(table,id){
+  if(!id||!isUUID(String(id)))return;
+  const r=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+encodeURIComponent(id),{method:'DELETE',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,Prefer:'return=minimal'}});
+  if(!r.ok)throw new Error(await r.text());
+}
+function pjRemoteDelete(table,id){
+  if(!navigator.onLine)return;
+  apiDelete(table,id).catch(e=>console.warn('Gagal hapus online di '+table,e));
+}
+async function apiDeleteAll(table){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=not.is.null',{method:'DELETE',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,Prefer:'return=minimal'}});
+  if(!r.ok)throw new Error(await r.text());
+}
+function pjRemoteDeleteAll(table){
+  if(!navigator.onLine)return;
+  apiDeleteAll(table).catch(e=>console.warn('Gagal hapus massal online di '+table,e));
+}
 function productToRemote(p){return {id:p.id,nama:p.nama,kode:p.kode,kategori:p.kategori||null,modal:+p.modal||0,min_stock:+p.min||0,stok_toko:+p.stokT||0,stok_g1:+p.stokG1||0,stok_g2:+p.stokG2||0,stok_g3:+p.stokG3||0,stok_g4:+p.stokG4||0,foto:p.foto||null};}
 function moveToRemote(x){return {id:x.id,type:x.type,product_id:isUUID(x.productId)?x.productId:null,product:x.product,qty:+x.qty||0,date:x.date,note:x.note||null,loc:x.loc||null,unit_price:+x.unitPrice||0,discount:+x.discount||0,total:+x.total||0,laba:+x.laba||0,modal_total:+x.modalTotal||0,username:x.user||null};}
 const LASTSYNCKEY='putrajaya_last_online_sync';
@@ -2021,6 +2091,40 @@ function refreshMoneyInputs(){bindMoneyInputs(document)}
 
 function actorName(){return session?.username||'admin';}
 function logActivity(action,details=''){db.activityLog=db.activityLog||[];db.activityLog.unshift({id:newId(),action,details,user:actorName(),dateTime:new Date().toISOString()});if(db.activityLog.length>2000)db.activityLog.length=2000;try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('Gagal menyimpan activityLog',e)}}
+
+const PJ_SUPABASE_FREE_LIMIT_BYTES=500*1024*1024;
+function pjFormatBytes(b){if(b>=1024*1024)return (b/(1024*1024)).toFixed(1)+' MB';if(b>=1024)return (b/1024).toFixed(0)+' KB';return Math.round(b)+' B';}
+async function pjFetchRealDbSize(){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/pj_db_size',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},body:'{}'});
+  if(!r.ok)throw new Error(await r.text());
+  const v=await r.json();
+  return typeof v==='number'?v:+v;
+}
+function renderStorageUsageCard(){
+  return '<div class="card" style="margin-top:10px" id="pjStorageCard"><h2>💾 Pemakaian Data (Supabase)</h2>'
+    +'<div class="muted" id="pjStorageStatus">Memuat data dari Supabase…</div>'
+    +'<div style="background:#eaf3ff;border-radius:20px;height:12px;margin-top:8px;overflow:hidden" id="pjStorageBarWrap"><div id="pjStorageBar" style="width:0%;background:#16a05d;height:100%"></div></div>'
+    +'<div class="actions" style="margin-top:10px"><button onclick="refreshStorageUsage()">🔄 Refresh</button></div>'
+    +'</div>';
+}
+window.refreshStorageUsage=async function(){
+  const statusEl=document.getElementById('pjStorageStatus');
+  const barEl=document.getElementById('pjStorageBar');
+  if(!statusEl)return;
+  statusEl.textContent='Memuat data dari Supabase…';
+  try{
+    if(!navigator.onLine)throw new Error('offline');
+    const bytes=await pjFetchRealDbSize();
+    const pct=Math.min(100,(bytes/PJ_SUPABASE_FREE_LIMIT_BYTES)*100);
+    const barColor=pct>=85?'#e55353':pct>=60?'#e0a63a':'#16a05d';
+    statusEl.innerHTML='<b>'+pjFormatBytes(bytes)+'</b> dari 500 MB (paket gratis Supabase) — '+pct.toFixed(1)+'%<br><span style="font-size:11px">Diperbarui: '+new Date().toLocaleTimeString('id-ID')+'</span>';
+    if(barEl){barEl.style.width=pct.toFixed(1)+'%';barEl.style.background=barColor;}
+  }catch(e){
+    statusEl.innerHTML=(!navigator.onLine)
+      ?'Tidak ada koneksi internet. Sambungkan lalu tekan Refresh.'
+      :'Gagal mengambil data (pastikan fungsi <code>pj_db_size</code> sudah dibuat di Supabase). <br><span style="font-size:11px">'+esc(e.message||'')+'</span>';
+  }
+};
 let __productSnapshot=JSON.stringify(db.products||[]), __moveSnapshot=JSON.stringify(db.moves||[]);
 function save(){
   try{
@@ -3660,7 +3764,11 @@ function backup(){
 function restore(e){
  if(!requireAdmin())return;let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.moves))throw 0;if(!Array.isArray(d.shoppingNotes))d.shoppingNotes=[];if(confirm('Ganti data sekarang dengan backup ini?')){db=d;save();page('home');toast('Data berhasil dipulihkan')}}catch(_){alert('File backup tidak valid')}};r.readAsText(f)}
 function resetAll(){
- if(!requireAdmin())return;if(confirm('PERINGATAN: semua barang dan riwayat akan dihapus. Lanjutkan?')){db={products:[],moves:[],shoppingNotes:[]};save();page('home');toast('Data direset')}}
+ if(!requireAdmin())return;
+ const pass=prompt('Masukkan password Admin untuk konfirmasi Reset Semua Data:');
+ if(pass===null)return;
+ if(!users.admin||pass!==users.admin.password){alert('Password Admin salah. Reset dibatalkan.');return;}
+ if(confirm('PERINGATAN: semua barang dan riwayat akan dihapus. Lanjutkan?')){pjRemoteDeleteAll('putrajaya_products');pjRemoteDeleteAll('putrajaya_moves');db={products:[],moves:[],shoppingNotes:[]};save();page('home');toast('Data direset')}}
 function closeM(){
   sheet.classList.remove('product-form-sheet','category-manager-sheet','sales-sheet','confirm-sale-sheet','permission-sheet','damage-sheet');
   modal.style.zIndex='20';
@@ -3675,7 +3783,7 @@ function closeM(){
     });
   }
 }
-function delProduct(id){if(confirm('Hapus barang? Riwayat transaksi tetap disimpan.')){db.products=db.products.filter(p=>p.id!==id);save();renderProducts()}}
+function delProduct(id){if(confirm('Hapus barang? Riwayat transaksi tetap disimpan.')){pjRemoteDelete('putrajaya_products',id);db.products=db.products.filter(p=>p.id!==id);save();renderProducts()}}
 if(!LOGIN_ENABLED){
   const savedSession=JSON.parse(localStorage.getItem(SESSIONKEY)||'null');
   session=savedSession&&['admin','karyawan'].includes(savedSession.role)?savedSession:{username:'admin',role:'admin',name:(users.admin?.name||'Admin')};
@@ -3693,10 +3801,10 @@ if(!LOGIN_ENABLED){
   window.renderLowStock=function(){let list=db.products.filter(p=>totalStockOf(p)<=+(p.min??3));app.innerHTML=`<div class="card"><h2>Stok Menipis</h2><div class="muted">Produk dengan stok sama dengan atau di bawah batas minimum.</div><div class="card" style="margin-top:10px;background:#f7f9fc"><b>⚠️ ${list.length} barang</b> berada di bawah batas minimum.</div><div class="grid" style="margin-top:12px">${list.length?list.map(p=>`<div class="card product"><img src="${p.foto||DEFAULT_PRODUCT_PHOTO}" style="cursor:pointer" onclick="showProductDetail('${p.id}')"><h3>${esc(p.nama)}</h3><div class="muted">${esc(p.kode)} · ${esc(p.kategori||'-')}</div><div class="stock">${productStockLineBold(p)}</div><div class="dangerText">MINIMUM: ${p.min} pcs</div><div class="actions"><button onclick="openProduct('${p.id}')">Edit</button><button class="success" onclick="addLowStockToShopping('${p.id}')">+ Catatan Belanja</button></div></div>`).join(''):'<div class="empty">Tidak ada stok menipis.</div>'}</div></div>`};
   window.renderHistory=function(){let list=db.moves||[];app.innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Laporan Transaksi</h2><button type="button" class="gray" onclick="page('activity')">Buka Laporan Aktivitas ›</button></div><div class="toolbar"><input id="hq" placeholder="Cari transaksi..." oninput="historyCards()"><button onclick="clearHistory()" class="danger">Hapus Riwayat</button></div><div class="tablewrap pj-txn-tablewrap"><table class="table pj-txn-table"><thead><tr><th>No.</th><th>Tanggal</th><th>Jenis</th><th>Barang</th><th>Qty</th><th>Lokasi</th><th>Nilai Modal</th><th>Omzet</th><th>Laba</th><th>Aksi</th></tr></thead><tbody id="hist"></tbody></table></div></div>`;historyCards()};
   window.historyCards=function(){let q=(document.getElementById('hq')?.value||'').toLowerCase();let l=(db.moves||[]).filter(x=>(String(x.product)+' '+String(x.type)+' '+String(x.note)+' '+String(x.loc)+' '+String(x.no||'')).toLowerCase().includes(q));const el=document.getElementById('hist');if(el)el.innerHTML=l.length?l.map(x=>`<tr><td>${esc(x.no||'-')}</td><td>${x.date}</td><td><span class="pill">${esc(x.type)}</span></td><td>${esc(x.product)}</td><td>${x.qty}</td><td>${esc(locLabel(x.loc))}</td><td>${x.modalTotal?modalText(modalScope(x.loc),x.modalTotal):'-'}</td><td>${x.type==='Penjualan Toko'&&!x.cancelled?rupiah(x.total):'-'}</td><td>${x.type==='Penjualan Toko'&&!x.cancelled?rupiah(x.laba):'-'}</td><td><button class="smallbtn danger" onclick="deleteTransaction('${x.id}')">Hapus</button></td></tr>`).join(''):'<tr><td colspan="10" class="empty">Belum ada transaksi.</td></tr>'};
-  window.deleteTransaction=function(id){if(!hasPermission('Hapus Transaksi')){alert('Anda tidak memiliki izin menghapus transaksi.');return}const m=db.moves.find(x=>String(x.id)===String(id));if(!m)return;if(!confirm('⚠️ Yakin ingin menghapus transaksi ini?'))return;db.moves=db.moves.filter(x=>String(x.id)!==String(id));logActivity('Hapus Transaksi',(m.no||m.id||'')+' '+(m.product||''));save();renderHistory();toast('✓ Transaksi dihapus')};
-  window.clearHistory=function(){if(!requireAdmin())return;if(confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Log aktivitas tetap dipertahankan. Tindakan ini tidak bisa dibatalkan.')){const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;db.moves=[];safeLog('Hapus Riwayat Transaksi','Semua transaksi dihapus, saldo kas & stok tetap aman, log aktivitas dipertahankan');save();renderHistory();if(typeof window.cashHeld==='function')window.cashHeld();toast('✓ Riwayat transaksi dikosongkan, saldo kas & stok tidak berubah')}};
+  window.deleteTransaction=function(id){if(!hasPermission('Hapus Transaksi')){alert('Anda tidak memiliki izin menghapus transaksi.');return}const m=db.moves.find(x=>String(x.id)===String(id));if(!m)return;if(!confirm('⚠️ Yakin ingin menghapus transaksi ini?'))return;pjRemoteDelete('putrajaya_moves',m.id);db.moves=db.moves.filter(x=>String(x.id)!==String(id));logActivity('Hapus Transaksi',(m.no||m.id||'')+' '+(m.product||''));save();renderHistory();toast('✓ Transaksi dihapus')};
+  window.clearHistory=function(){if(!requireAdmin())return;if(confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Log aktivitas tetap dipertahankan. Tindakan ini tidak bisa dibatalkan.')){const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;pjRemoteDeleteAll('putrajaya_moves');db.moves=[];safeLog('Hapus Riwayat Transaksi','Semua transaksi dihapus, saldo kas & stok tetap aman, log aktivitas dipertahankan');save();renderHistory();if(typeof window.cashHeld==='function')window.cashHeld();toast('✓ Riwayat transaksi dikosongkan, saldo kas & stok tidak berubah')}};
   // Safer backup/restore: include users, settings, counters, notes, photos and activity log.
-  window.renderBackup=function(){if(!requireAdmin())return;app.innerHTML=`<div class="card"><h2>Backup & Restore</h2><p class="muted">Backup mencakup seluruh data aplikasi: katalog, stok, transaksi, foto, akun, hak akses, Catatan Belanja, pengaturan, nomor transaksi, dan Riwayat Aktivitas.</p><div class="actions"><button onclick="backup()">Download Backup Lengkap</button><button class="success" onclick="document.getElementById('restoreFile').click()">↻ Pulihkan Data (Restore)</button><input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restore(event)"></div><div class="muted" style="margin-top:6px">Pilih file backup (.json) yang pernah diunduh untuk memulihkan data.</div><hr><button class="danger" onclick="resetAll()">Reset Semua Data</button></div><div class="card" style="margin-top:10px"><h2>Backup Online</h2><p class="muted">Data barang &amp; transaksi otomatis tersinkron ke server online setiap ada perubahan, dan disinkron ulang otomatis setiap 5 menit selama HP terhubung internet.</p><div class="card" id="onlineSyncStatus" style="background:#f7f9fc;border:1px solid #dce5f2">${navigator.onLine?'🟢 Online':'🔴 Offline'} · <span id="onlineSyncTime">${lastOnlineSyncText()}</span></div><div class="actions" style="margin-top:10px"><button class="success" onclick="manualSyncOnline()">Backup Online Sekarang</button></div></div>`};
+  window.renderBackup=function(){if(!requireAdmin())return;app.innerHTML=`<div class="card"><h2>Backup & Restore</h2><p class="muted">Backup mencakup seluruh data aplikasi: katalog, stok, transaksi, foto, akun, hak akses, Catatan Belanja, pengaturan, nomor transaksi, dan Riwayat Aktivitas.</p><div class="actions"><button onclick="backup()">Download Backup Lengkap</button><button class="success" onclick="document.getElementById('restoreFile').click()">↻ Pulihkan Data (Restore)</button><input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restore(event)"></div><div class="muted" style="margin-top:6px">Pilih file backup (.json) yang pernah diunduh untuk memulihkan data.</div><hr><button class="danger" onclick="resetAll()">Reset Semua Data</button></div><div class="card" style="margin-top:10px"><h2>Backup Online</h2><p class="muted">Data barang &amp; transaksi otomatis tersinkron ke server online setiap ada perubahan, dan disinkron ulang otomatis setiap 5 menit selama HP terhubung internet.</p><div class="card" id="onlineSyncStatus" style="background:#f7f9fc;border:1px solid #dce5f2">${navigator.onLine?'🟢 Online':'🔴 Offline'} · <span id="onlineSyncTime">${lastOnlineSyncText()}</span></div><div class="actions" style="margin-top:10px"><button class="success" onclick="manualSyncOnline()">Backup Online Sekarang</button></div></div>${renderStorageUsageCard()}`;setTimeout(()=>{if(window.refreshStorageUsage)refreshStorageUsage();},0);};
   window.manualSyncOnline=async function(){toast('Menyinkronkan ke server online...');try{await syncOnline();const st=document.getElementById('onlineSyncTime');if(st)st.textContent=lastOnlineSyncText();toast('✓ Backup online berhasil')}catch(err){console.warn(err);toast('Gagal sinkron online. Cek koneksi internet.')}};
   window.backup=function(){if(!requireAdmin())return;const payload={format:'PUTRAJAYA2_BACKUP',version:2,createdAt:new Date().toISOString(),db:JSON.parse(JSON.stringify(db)),users:JSON.parse(JSON.stringify(users)),sessionInfo:{lastUser:session?.username||'admin'}};const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.href=url;a.download='PUTRAJAYA2_BACKUP_'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);safeLog('Backup','Backup lengkap dibuat');save();toast('✓ Backup lengkap berhasil dibuat')};
   window.restore=function(e){if(!requireAdmin())return;const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const raw=JSON.parse(r.result);const d=raw.db||raw;if(!Array.isArray(d.products)||!Array.isArray(d.moves))throw new Error('Format backup tidak valid');d.shoppingNotes=Array.isArray(d.shoppingNotes)?d.shoppingNotes:[];d.activityLog=Array.isArray(d.activityLog)?d.activityLog:[];d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};if(!confirm('Yakin ingin melakukan Restore? Data yang dipulihkan akan menggantikan data yang terkait dengan backup.'))return;const oldDb=JSON.parse(JSON.stringify(db)),oldUsers=JSON.parse(JSON.stringify(users));try{db=d;if(raw.users)users=raw.users;normalizeUsers();if(typeof refreshLocationNames==='function')refreshLocationNames();safeLog('Restore','Backup dipulihkan dari '+f.name);save();page('home');toast('✓ Data berhasil dipulihkan')}catch(err){db=oldDb;users=oldUsers;save();throw err}}catch(err){console.error(err);alert('File backup tidak valid atau proses restore gagal. Data yang sedang digunakan tetap dipertahankan.')}};r.readAsText(f);e.target.value=''};
