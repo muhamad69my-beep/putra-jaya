@@ -1,31 +1,73 @@
-- name: Init project
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Bubblewrap
         run: |
-          expect -c '
-          set timeout 900
-          spawn bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory=app-build
-          expect {
-            -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "y\r"; exp_continue }
-            -re "Application name" { send "\r"; exp_continue }
-            -re "Short name" { send "\r"; exp_continue }
-            -re "Package ID" { send "\r"; exp_continue }
-            -re "Full name" { send "PUTRAJAYA\r"; exp_continue }
-            -re "Organization" { send "PUTRAJAYA\r"; exp_continue }
-            -re "Country code" { send "ID\r"; exp_continue }
-            -re "Password" { send "putrajaya123\r"; exp_continue }
-            -re "Confirm" { send "putrajaya123\r"; exp_continue }
-            eof
-          }'
+          npm install -g @bubblewrap/cli
+          bubblewrap --version
+
+      - name: Download PWA manifest
+        run: |
+          curl -fL \
+            "https://muhamad69my-beep.github.io/putra-jaya/manifest.json" \
+            -o manifest.json
+
+          echo "=== manifest.json ==="
+          cat manifest.json
+
+      - name: Initialize Bubblewrap project
+        run: |
+          mkdir -p app-build
+
+          bubblewrap init \
+            --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" \
+            --directory="app-build" \
+            --skipPwaValidation
+
       - name: Build APK
+        working-directory: app-build
         run: |
-          cd app-build
-          expect -c '
-          set timeout 900
-          spawn bubblewrap build --skipPwaValidation
-          expect {
-            -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "y\r"; exp_continue }
-            -re "Password" { send "putrajaya123\r"; exp_continue }
-            -re "Confirm" { send "putrajaya123\r"; exp_continue }
-            eof
-          }'
+          bubblewrap build \
+            --skipPwaValidation
+
+      - name: Find APK
+        run: |
+          echo "=== APK FILES ==="
+          find app-build -type f \( -name "*.apk" -o -name "*.aab" \) -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: putra-jaya-apk
+          path: |
+            app-build/**/*.apk
+            app-build/*.apk
+          if-no-files-found: error
