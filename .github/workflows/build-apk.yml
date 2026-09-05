@@ -17,11 +17,11 @@ jobs:
         run: npm install -g @bubblewrap/cli
       - name: Init project
         run: |
-          yes "" | bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory=app-build
+          yes "y" | bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory=app-build
       - name: Build APK
         run: |
           cd app-build
-          yes "" | bubblewrap build
+          yes "y" | bubblewrap build
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
