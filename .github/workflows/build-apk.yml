@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -20,7 +21,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -33,48 +34,131 @@ jobs:
           npm install -g @bubblewrap/cli
           bubblewrap --version
 
-      - name: Initialize Bubblewrap
+      - name: Init project
         run: |
           rm -rf app-build
 
-          bubblewrap init \
-            --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" \
-            --directory="app-build" \
-            --skipPwaValidation
+          expect -c '
+          set timeout 900
+
+          spawn bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory=app-build
+
+          expect {
+            -re {\(Y/n\)} {
+              send "\r"
+              exp_continue
+            }
+
+            -re {\(y/N\)} {
+              send "y\r"
+              exp_continue
+            }
+
+            -re "Application name" {
+              send "\r"
+              exp_continue
+            }
+
+            -re "Short name" {
+              send "\r"
+              exp_continue
+            }
+
+            -re "Package ID" {
+              send "\r"
+              exp_continue
+            }
+
+            -re "Full name" {
+              send "PUTRAJAYA\r"
+              exp_continue
+            }
+
+            -re "Organization" {
+              send "PUTRAJAYA\r"
+              exp_continue
+            }
+
+            -re "Country code" {
+              send "ID\r"
+              exp_continue
+            }
+
+            -re "Password" {
+              send "putrajaya123\r"
+              exp_continue
+            }
+
+            -re "Confirm" {
+              send "putrajaya123\r"
+              exp_continue
+            }
+
+            eof
+          }'
 
       - name: Build APK
-        working-directory: app-build
         run: |
-          bubblewrap build --skipPwaValidation
+          cd app-build
 
-      - name: Find APK
+          expect -c '
+          set timeout 900
+
+          spawn bubblewrap build --skipPwaValidation
+
+          expect {
+            -re {\(Y/n\)} {
+              send "\r"
+              exp_continue
+            }
+
+            -re {\(y/N\)} {
+              send "y\r"
+              exp_continue
+            }
+
+            -re "Password" {
+              send "putrajaya123\r"
+              exp_continue
+            }
+
+            -re "Confirm" {
+              send "putrajaya123\r"
+              exp_continue
+            }
+
+            eof
+          }'
+
+      - name: Cari semua APK
         run: |
           echo "================================"
           echo "MENCARI FILE APK"
           echo "================================"
 
-          find . -type f -name "*.apk" -print
+          find . -type f -iname "*.apk" -print
 
-          echo "================================"
-          echo "ISI FOLDER app-build"
-          echo "================================"
-
-          find . -maxdepth 4 -type f -print
-
-      - name: Prepare APK
+      - name: Siapkan APK untuk Download
         run: |
-          APK=$(find app-build -type f -name "*.apk" | head -n 1)
+          APK=$(find . -type f -iname "*.apk" | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: APK TIDAK DITEMUKAN!"
+            echo "================================"
+            echo "ERROR: APK TIDAK DITEMUKAN"
+            echo "================================"
             exit 1
           fi
 
-          echo "APK ditemukan:"
+          echo "APK ditemukan di:"
           echo "$APK"
 
           mkdir -p apk-output
+
           cp "$APK" apk-output/putra-jaya.apk
+
+          echo "================================"
+          echo "APK SIAP DIUPLOAD"
+          echo "================================"
 
           ls -lh apk-output/putra-jaya.apk
 
