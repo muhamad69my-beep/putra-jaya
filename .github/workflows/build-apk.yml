@@ -14,15 +14,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-      - name: Install Bubblewrap CLI
-        run: npm install -g @bubblewrap/cli
+      - name: Install tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y expect
+          npm install -g @bubblewrap/cli
       - name: Init project
         run: |
-          printf 'n\n' | bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory=app-build
+          expect -c '
+          set timeout 600
+          spawn bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory=app-build
+          expect {
+            -re "install the JDK" { send "\r"; exp_continue }
+            -re "install the Android SDK" { send "\r"; exp_continue }
+            -re "Accept.*y/N" { send "y\r"; exp_continue }
+            -re "Application name" { send "\r"; exp_continue }
+            -re "Short name" { send "\r"; exp_continue }
+            -re "Package ID" { send "\r"; exp_continue }
+            -re "Full name" { send "PUTRAJAYA\r"; exp_continue }
+            -re "Organization" { send "PUTRAJAYA\r"; exp_continue }
+            -re "Country code" { send "ID\r"; exp_continue }
+            -re "Password" { send "putrajaya123\r"; exp_continue }
+            -re "Confirm" { send "putrajaya123\r"; exp_continue }
+            eof
+          }'
       - name: Build APK
         run: |
           cd app-build
-          bubblewrap build --skipPwaValidation
+          expect -c '
+          set timeout 600
+          spawn bubblewrap build --skipPwaValidation
+          expect {
+            -re "Password" { send "putrajaya123\r"; exp_continue }
+            -re "Confirm" { send "putrajaya123\r"; exp_continue }
+            eof
+          }'
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
