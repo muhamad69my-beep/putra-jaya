@@ -2,6 +2,9 @@ name: Build APK
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: read
@@ -11,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -39,101 +41,41 @@ jobs:
           npm install -g @bubblewrap/cli
           bubblewrap --version
 
-      # ==================================================
-      # PENTING:
-      # Paksa Bubblewrap memakai JDK 17 dan Android SDK
-      # yang sudah disediakan GitHub Actions.
-      # ==================================================
       - name: Configure Bubblewrap JDK and Android SDK
         run: |
           echo "JAVA_HOME=$JAVA_HOME"
           echo "ANDROID_HOME=$ANDROID_HOME"
-
           test -d "$JAVA_HOME"
           test -d "$ANDROID_HOME"
-
           bubblewrap updateConfig \
             --jdkPath="$JAVA_HOME" \
             --androidSdkPath="$ANDROID_HOME"
 
-          echo "=== Bubblewrap configuration selesai ==="
-
       - name: Check Bubblewrap configuration
-        run: |
-          bubblewrap doctor
+        run: bubblewrap doctor
+
+      - name: Generate temporary signing password
+        run: echo "BUBBLEWRAP_KEY_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
 
       - name: Init project
         run: |
           rm -rf app-build
-
           expect -c '
           set timeout 900
-
-          spawn bubblewrap init \
-            --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" \
-            --directory="app-build"
-
+          spawn bubblewrap init --manifest="https://muhamad69my-beep.github.io/putra-jaya/manifest.json" --directory="app-build"
           expect {
-            -re "Do you want Bubblewrap to install the JDK" {
-              send "n\r"
-              exp_continue
-            }
-
-            -re "Do you want Bubblewrap to install the Android SDK" {
-              send "n\r"
-              exp_continue
-            }
-
-            -re {\(Y/n\)} {
-              send "\r"
-              exp_continue
-            }
-
-            -re {\(y/N\)} {
-              send "y\r"
-              exp_continue
-            }
-
-            -re "Application name" {
-              send "\r"
-              exp_continue
-            }
-
-            -re "Short name" {
-              send "\r"
-              exp_continue
-            }
-
-            -re "Package ID" {
-              send "\r"
-              exp_continue
-            }
-
-            -re "Full name" {
-              send "PUTRAJAYA\r"
-              exp_continue
-            }
-
-            -re "Organization" {
-              send "PUTRAJAYA\r"
-              exp_continue
-            }
-
-            -re "Country code" {
-              send "ID\r"
-              exp_continue
-            }
-
-            -re "Password" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
-            -re "Confirm" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
+            -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
+            -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
+            -re {\(Y/n\)} { send "\r"; exp_continue }
+            -re {\(y/N\)} { send "y\r"; exp_continue }
+            -re "Application name" { send "\r"; exp_continue }
+            -re "Short name" { send "\r"; exp_continue }
+            -re "Package ID" { send "\r"; exp_continue }
+            -re "Full name" { send "PUTRAJAYA\r"; exp_continue }
+            -re "Organization" { send "PUTRAJAYA\r"; exp_continue }
+            -re "Country code" { send "ID\r"; exp_continue }
+            -re "Password" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re "Confirm" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
             eof
           }'
 
@@ -142,66 +84,30 @@ jobs:
         run: |
           expect -c '
           set timeout 900
-
           spawn bubblewrap build --skipPwaValidation
-
           expect {
-            -re "Do you want Bubblewrap to install the JDK" {
-              send "n\r"
-              exp_continue
-            }
-
-            -re "Do you want Bubblewrap to install the Android SDK" {
-              send "n\r"
-              exp_continue
-            }
-
-            -re {\(Y/n\)} {
-              send "\r"
-              exp_continue
-            }
-
-            -re {\(y/N\)} {
-              send "y\r"
-              exp_continue
-            }
-
-            -re "Password" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
-            -re "Confirm" {
-              send "putrajaya123\r"
-              exp_continue
-            }
-
+            -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
+            -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
+            -re {\(Y/n\)} { send "\r"; exp_continue }
+            -re {\(y/N\)} { send "y\r"; exp_continue }
+            -re "Password" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re "Confirm" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
             eof
           }'
 
       - name: Cari APK
         run: |
-          echo "======================================"
-          echo "MENCARI SEMUA FILE APK"
-          echo "======================================"
-
           find . -type f -iname "*.apk" -print
 
       - name: Siapkan APK
         run: |
           APK=$(find . -type f -iname "*.apk" | head -n 1)
-
           if [ -z "$APK" ]; then
             echo "ERROR: APK TIDAK DITEMUKAN"
             exit 1
           fi
-
-          echo "APK ditemukan:"
-          echo "$APK"
-
           mkdir -p apk-output
           cp "$APK" apk-output/putra-jaya.apk
-
           ls -lh apk-output/putra-jaya.apk
 
       - name: Upload APK
