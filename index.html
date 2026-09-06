@@ -1823,10 +1823,30 @@ function moveToRemote(x){return {id:x.id,no:x.no||null,type:x.type,product_id:is
 // --- PEMULIHAN DATA DARI CLOUD (tarik balik dari Supabase ke HP) ---
 function productFromRemote(r){return {id:r.id,nama:r.nama,kode:r.kode,kategori:r.kategori||'',modal:+r.modal||0,min:+r.min_stock||0,stokT:+r.stok_toko||0,stokG1:+r.stok_g1||0,stokG2:+r.stok_g2||0,stokG3:+r.stok_g3||0,stokG4:+r.stok_g4||0,foto:r.foto||''};}
 function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.product_id,product:r.product,qty:+r.qty||0,date:r.date,note:r.note||'',loc:r.loc||'',unitPrice:+r.unit_price||0,discount:+r.discount||0,total:+r.total||0,laba:+r.laba||0,modalTotal:+r.modal_total||0,user:r.username||'-',payment:r.payment||'-',paymentAmount:+r.payment_amount||0,cancelled:!!r.cancelled,cancelledAt:r.cancelled_at||null,cancelledBy:r.cancelled_by||null,correctionOf:r.correction_of||null};}
+// --- SINKRON DATA LAINNYA (Riwayat Aktivitas, Kategori, Hutang, Pengeluaran,
+// Catatan Belanja, Setoran, Pengaturan, dll) — disimpan sebagai satu baris JSON
+// per jenis data di tabel putrajaya_appdata, supaya semua fitur ikut 2 arah. ---
+const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings'];
+async function syncMiscOnline(){
+  if(!navigator.onLine)return;
+  const rows=PJ_MISC_KEYS.map(k=>({key:k,value:(db[k]===undefined?null:db[k]),updated_at:new Date().toISOString()}));
+  await apiUpsert('putrajaya_appdata',rows);
+}
+async function pullMiscFromCloud(){
+  if(!navigator.onLine)return false;
+  try{
+    const rows=await apiGet('putrajaya_appdata');
+    if(!rows.length)return false;
+    rows.forEach(r=>{ if(PJ_MISC_KEYS.includes(r.key) && r.value!==null) db[r.key]=r.value; });
+    localStorage.setItem(KEY,JSON.stringify(db));
+    return true;
+  }catch(e){console.warn('Gagal menarik data lain dari cloud',e);return false;}
+}
 async function restoreFromCloud(){
   if(!navigator.onLine)return false;
   try{
     const [remoteProducts,remoteMoves]=await Promise.all([apiGet('putrajaya_products'),apiGet('putrajaya_moves')]);
+    await pullMiscFromCloud();
     if(!remoteProducts.length && !remoteMoves.length)return false;
     db.products=remoteProducts.map(productFromRemote);
     db.moves=remoteMoves.map(moveFromRemote);
@@ -1845,6 +1865,7 @@ window.pjManualRestore=async function(btn){
   }
   try{
     const [remoteProducts,remoteMoves]=await Promise.all([apiGet('putrajaya_products'),apiGet('putrajaya_moves')]);
+    await pullMiscFromCloud();
     if(!remoteProducts.length && !remoteMoves.length){
       alert('Tidak ada data ditemukan di cloud (tabel kosong).');
       if(btn){btn.disabled=false;btn.textContent='🔄 Pulihkan Data dari Cloud';}
@@ -1854,7 +1875,7 @@ window.pjManualRestore=async function(btn){
     db.moves=remoteMoves.map(moveFromRemote);
     localStorage.setItem(KEY,JSON.stringify(db));
     localStorage.setItem(LASTSYNCKEY,new Date().toISOString());
-    alert('✓ Berhasil! '+remoteProducts.length+' produk dan '+remoteMoves.length+' transaksi dipulihkan. Aplikasi akan dimuat ulang.');
+    alert('✓ Berhasil! '+remoteProducts.length+' produk dan '+remoteMoves.length+' transaksi dipulihkan (data lain seperti hutang, kategori, dan pengaturan juga ikut ditarik). Aplikasi akan dimuat ulang.');
     location.reload();
   }catch(e){
     alert('Gagal memulihkan data: '+(e.message||e));
@@ -1867,6 +1888,10 @@ document.addEventListener('DOMContentLoaded',async function(){
     if(kosong&&navigator.onLine){
       const ok=await restoreFromCloud();
       if(ok)location.reload();
+    }else if(navigator.onLine){
+      // HP ini sudah punya data produk/transaksi, tapi tetap tarik data
+      // lain (hutang, kategori, pengaturan, dll) supaya konsisten antar HP.
+      pullMiscFromCloud().catch(()=>{});
     }
   }catch(e){console.warn(e);}
 });
@@ -1876,6 +1901,7 @@ async function syncOnline(){
   for(const p of db.products){if(!isUUID(p.id)){const old=p.id;p.id=newId();db.moves.forEach(m=>{if(String(m.productId)===String(old))m.productId=p.id;});}}
   await apiUpsert('putrajaya_products',db.products.map(productToRemote));
   await apiUpsert('putrajaya_moves',db.moves.map(moveToRemote));
+  await syncMiscOnline();
   localStorage.setItem(KEY,JSON.stringify(db));
   localStorage.setItem(LASTSYNCKEY,new Date().toISOString());
 }
@@ -1884,6 +1910,44 @@ function lastOnlineSyncText(){
   if(!t)return 'Belum pernah sinkron online';
   return 'Terakhir sinkron: '+new Date(t).toLocaleString('id-ID');
 }
+// --- AUTO-PULL BERKALA (supaya HP lain otomatis dapat data terbaru) ---
+// Menggabungkan data cloud ke data lokal berdasarkan ID unik masing-masing,
+// bukan menimpa semua data lokal — jadi data yang belum sempat ke-sync
+// dari HP ini tidak hilang.
+function pjMergeById(localArr,remoteArr,idField){
+  const map=new Map();
+  (Array.isArray(localArr)?localArr:[]).forEach(x=>{if(x&&x[idField]!=null)map.set(String(x[idField]),x)});
+  (Array.isArray(remoteArr)?remoteArr:[]).forEach(x=>{if(x&&x[idField]!=null)map.set(String(x[idField]),x)});
+  return Array.from(map.values());
+}
+function pjMergeStrings(localArr,remoteArr){
+  const seen=new Map();
+  [...(Array.isArray(localArr)?localArr:[]),...(Array.isArray(remoteArr)?remoteArr:[])].forEach(s=>{const k=String(s||'').trim();if(k)seen.set(k.toLowerCase(),k)});
+  return Array.from(seen.values());
+}
+const PJ_ID_KEYED_MISC=['activityLog','customerDebts','supplierDebts','deletedDebtHistory','notifications','pengeluaran','setoranBos','shoppingNotes'];
+async function pjMergePullAll(){
+  if(!navigator.onLine)return;
+  try{
+    const [remoteProducts,remoteMoves,remoteAppdataRows]=await Promise.all([apiGet('putrajaya_products'),apiGet('putrajaya_moves'),apiGet('putrajaya_appdata')]);
+    db.products=pjMergeById(db.products,remoteProducts.map(productFromRemote),'id');
+    db.moves=pjMergeById(db.moves,remoteMoves.map(moveFromRemote),'id');
+    const remoteMap={};remoteAppdataRows.forEach(r=>{remoteMap[r.key]=r.value});
+    PJ_ID_KEYED_MISC.forEach(k=>{if(remoteMap[k]!==undefined&&remoteMap[k]!==null)db[k]=pjMergeById(db[k],remoteMap[k],'id')});
+    if(remoteMap.categories!=null)db.categories=pjMergeStrings(db.categories,remoteMap.categories);
+    if(remoteMap.dayClosings!=null)db.dayClosings=pjMergeById(db.dayClosings,remoteMap.dayClosings,'tanggal');
+    if(remoteMap.payments!=null)db.payments=Object.assign({},db.payments||{},remoteMap.payments||{});
+    if(remoteMap.settings!=null)db.settings=Object.assign({},db.settings||{},remoteMap.settings||{});
+    ['pengeluaranArsipTotal','setoranArsipTotal','salesTunaiArsipTotal'].forEach(k=>{if(remoteMap[k]!=null)db[k]=remoteMap[k]});
+    localStorage.setItem(KEY,JSON.stringify(db));
+    localStorage.setItem(LASTSYNCKEY,new Date().toISOString());
+  }catch(e){console.warn('Auto-pull gagal',e);}
+}
+// Tarik data terbaru: tiap 2 menit selagi app terbuka, dan setiap kali
+// app dibuka/kembali aktif (misal user balik dari app lain ke app ini).
+setInterval(()=>{pjMergePullAll()},2*60*1000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pjMergePullAll()});
+window.addEventListener('online',()=>{pjMergePullAll()});
 // Sinkron otomatis berkala + saat koneksi kembali online, sebagai cadangan
 // tambahan selain sinkron otomatis yang sudah berjalan setiap ada perubahan data.
 window.addEventListener('online',()=>{syncOnline().catch(()=>{})});
