@@ -5,9 +5,12 @@ on:
   push:
     paths:
       - '.github/workflows/build-apk.yml'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'index.html'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: putra-jaya-apk-build
@@ -44,7 +47,6 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list_installed | sed -n '1,160p'
           test -d "$ANDROID_HOME/platforms/android-35"
           test -d "$ANDROID_HOME/build-tools/35.0.0"
 
@@ -66,15 +68,11 @@ jobs:
       - name: Configure Bubblewrap JDK and Android SDK
         shell: bash
         run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "ANDROID_HOME=$ANDROID_HOME"
           mkdir -p "$HOME/.bubblewrap"
-          rm -rf "$ANDROID_HOME/bin"
-          ln -s "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/bin"
           printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
           cat "$HOME/.bubblewrap/config.json"
           test -x "$JAVA_HOME/bin/java"
-          test -x "$ANDROID_HOME/bin/sdkmanager"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
       - name: Check Bubblewrap configuration
         run: bubblewrap doctor
@@ -123,7 +121,7 @@ jobs:
             -re {Organization:} { send "PUTRAJAYA\r"; exp_continue }
             -re {Country code:} { send "ID\r"; exp_continue }
             -re {Keystore password:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
             -re {ERROR|Error:} { puts "Bubblewrap init reported an error."; exit 1 }
             timeout { puts "Bubblewrap init timed out."; exit 1 }
             eof {
@@ -136,7 +134,6 @@ jobs:
           test -s app-build/twa-manifest.json
           test -f app-build/gradlew
           chmod +x app-build/gradlew
-          echo "Bubblewrap init berhasil."
 
       - name: Build APK
         working-directory: app-build
@@ -164,9 +161,20 @@ jobs:
           cp "$APK" apk-output/putra-jaya.apk
           ls -lh apk-output/putra-jaya.apk
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: putra-jaya-apk
           path: apk-output/putra-jaya.apk
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: PUTRAJAYA APK ${{ github.run_number }}
+          body: |
+            APK PUTRAJAYA hasil build otomatis dari GitHub Actions.
+          files: apk-output/putra-jaya.apk
+          fail_on_unmatched_files: true
