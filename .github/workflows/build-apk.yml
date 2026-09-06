@@ -54,54 +54,65 @@ jobs:
       - name: Check Bubblewrap configuration
         run: bubblewrap doctor
 
-      - name: Generate temporary signing password
-        run: echo "BUBBLEWRAP_KEY_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+      - name: Generate temporary signing passwords
+        run: |
+          PASSWORD=$(openssl rand -hex 24)
+          echo "BUBBLEWRAP_KEYSTORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+          echo "BUBBLEWRAP_KEY_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
 
       - name: Init project
         run: |
           rm -rf app-build
           expect -c '
-          set timeout 900
+          set timeout 180
           spawn bubblewrap init --manifest=https://muhamad69my-beep.github.io/putra-jaya/manifest.json --directory=app-build
           expect {
-            -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
-            -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
-            -re {Domain:} { send "muhamad69my-beep.github.io\r"; exp_continue }
-            -re {URL path:} { send "/putra-jaya/\r"; exp_continue }
-            -re {Application name:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {Short name:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {Package ID:} { send "com.putrajaya.app\r"; exp_continue }
-            -re {Version:} { send "1.0.0\r"; exp_continue }
-            -re {Version code:} { send "1\r"; exp_continue }
-            -re {Full name:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {Organization:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {Country code:} { send "ID\r"; exp_continue }
-            -re {Password} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
-            -re {Confirm} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
-            -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "\r"; exp_continue }
+            -re {Do you want Bubblewrap to install the JDK} { send "n\r"; exp_continue }
+            -re {Do you want Bubblewrap to install Android SDK} { send "n\r"; exp_continue }
+            -re {\? Directory .* \(Y/n\)} { send "\r"; exp_continue }
+            -re {\? Domain:} { send "\r"; exp_continue }
+            -re {\? URL path:} { send "\r"; exp_continue }
+            -re {\? Application name:} { send "\r"; exp_continue }
+            -re {\? Short name:} { send "\r"; exp_continue }
+            -re {\? Package ID:} { send "\r"; exp_continue }
+            -re {\? Version code:} { send "\r"; exp_continue }
+            -re {\? Display mode:} { send "\r"; exp_continue }
+            -re {\? Orientation:} { send "\r"; exp_continue }
+            -re {\? Theme color:} { send "\r"; exp_continue }
+            -re {\? Background color:} { send "\r"; exp_continue }
+            -re {\? Icon URL:} { send "\r"; exp_continue }
+            -re {\? Maskable icon URL:} { send "\r"; exp_continue }
+            -re {\? Monochrome icon URL:} { send "\r"; exp_continue }
+            -re {\? .*shortcuts.*\(Y/n\)} { send "\r"; exp_continue }
+            -re {\? .*Play Billing.*\(y/N\)} { send "\r"; exp_continue }
+            -re {\? .*location delegation.*\(y/N\)} { send "\r"; exp_continue }
+            -re {\? Key path:} { send "\r"; exp_continue }
+            -re {\? Key alias:} { send "\r"; exp_continue }
+            -re {\? .*create.*signing key.*\(Y/n\)} { send "\r"; exp_continue }
+            -re {\? Full name:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {\? Organizational Unit:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {\? Organization:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {\? Country code:} { send "ID\r"; exp_continue }
+            -re {\? Keystore password:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
+            -re {\? Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {ERROR|Error:} { exit 1 }
+            timeout { exit 1 }
             eof
           }'
-          test -d app-build
           test -f app-build/twa-manifest.json
-          find app-build -maxdepth 2 -type f -print
+          test -f app-build/gradlew
+          echo "Bubblewrap init berhasil."
 
       - name: Build APK
         working-directory: app-build
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ env.BUBBLEWRAP_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ env.BUBBLEWRAP_KEY_PASSWORD }}
         run: |
           test -f twa-manifest.json
-          expect -c '
-          set timeout 900
-          spawn bubblewrap build --skipPwaValidation
-          expect {
-            -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
-            -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
-            -re "Password" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
-            -re "Confirm" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
-            -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "\r"; exp_continue }
-            eof
-          }'
+          test -f gradlew
+          chmod +x gradlew
+          bubblewrap build --skipPwaValidation
 
       - name: Cari APK
         run: find . -type f -iname "*.apk" -print
