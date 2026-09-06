@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+env:
+  BUBBLEWRAP_JDK_PATH: ${{ env.JAVA_HOME }}
+  BUBBLEWRAP_ANDROID_SDK_PATH: ${{ env.ANDROID_HOME }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -37,23 +41,17 @@ jobs:
           sudo apt-get install -y expect
 
       - name: Install Bubblewrap
-        run: |
-          npm install -g @bubblewrap/cli
-          expect -c '
-          set timeout 120
-          spawn bubblewrap --version
-          expect {
-            -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
-            -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
-            eof
-          }'
+        run: npm install -g @bubblewrap/cli
 
       - name: Configure Bubblewrap JDK and Android SDK
         run: |
           echo "JAVA_HOME=$JAVA_HOME"
           echo "ANDROID_HOME=$ANDROID_HOME"
-          test -d "$JAVA_HOME"
-          test -d "$ANDROID_HOME"
+          mkdir -p "$HOME/.bubblewrap"
+          printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
+          cat "$HOME/.bubblewrap/config.json"
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" || true
           bubblewrap updateConfig \
             --jdkPath="$JAVA_HOME" \
             --androidSdkPath="$ANDROID_HOME"
@@ -103,8 +101,7 @@ jobs:
           }'
 
       - name: Cari APK
-        run: |
-          find . -type f -iname "*.apk" -print
+        run: find . -type f -iname "*.apk" -print
 
       - name: Siapkan APK
         run: |
