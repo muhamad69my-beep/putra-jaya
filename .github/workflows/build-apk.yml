@@ -105,6 +105,7 @@ jobs:
             -re {URL path:} { send "\r"; exp_continue }
             -re {Application name:} { send "\r"; exp_continue }
             -re {Short name:} { send "\r"; exp_continue }
+            -re {Application ID:} { send "\r"; exp_continue }
             -re {Package ID:} { send "\r"; exp_continue }
             -re {Version code:} { send "\r"; exp_continue }
             -re {Display mode:} { send "\r"; exp_continue }
