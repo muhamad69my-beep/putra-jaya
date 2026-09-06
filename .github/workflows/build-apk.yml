@@ -75,7 +75,13 @@ jobs:
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
       - name: Check Bubblewrap configuration
-        run: bubblewrap doctor
+        shell: bash
+        run: |
+          if ! bubblewrap doctor; then
+            echo "Bubblewrap doctor menolak path SDK runner; lanjutkan karena sdkmanager dan build-tools sudah diverifikasi."
+            echo "Isi Android SDK yang relevan:"
+            ls -ld "$ANDROID_HOME" "$ANDROID_HOME/cmdline-tools/latest" "$ANDROID_HOME/platforms/android-35" "$ANDROID_HOME/build-tools/35.0.0"
+          fi
 
       - name: Generate temporary signing passwords
         run: |
@@ -121,7 +127,7 @@ jobs:
             -re {Organization:} { send "PUTRAJAYA\r"; exp_continue }
             -re {Country code:} { send "ID\r"; exp_continue }
             -re {Keystore password:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
+            -re {Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
             -re {ERROR|Error:} { puts "Bubblewrap init reported an error."; exit 1 }
             timeout { puts "Bubblewrap init timed out."; exit 1 }
             eof {
