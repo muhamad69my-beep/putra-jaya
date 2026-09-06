@@ -85,7 +85,7 @@ jobs:
             -re {Do you want Bubblewrap to install the JDK} { send "n\r"; exp_continue }
             -re {Do you want Bubblewrap to install Android SDK} { send "n\r"; exp_continue }
             -re {create it now} { send "\r"; exp_continue }
-            -re {create (a )?signing key} { send "\r"; exp_continue }
+            -re {create one now} { send "\r"; exp_continue }
             -re {Domain:} { send "\r"; exp_continue }
             -re {URL path:} { send "\r"; exp_continue }
             -re {Application name} { send "\r"; exp_continue }
