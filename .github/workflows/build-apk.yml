@@ -75,28 +75,118 @@ jobs:
           echo "BUBBLEWRAP_KEY_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
 
       - name: Init project
+        shell: bash
         run: |
           rm -rf app-build
-          expect -c '
-          set timeout 600
+          expect <<'EXPECT_SCRIPT'
+          set timeout 180
           log_user 1
           spawn bubblewrap init --manifest=https://muhamad69my-beep.github.io/putra-jaya/manifest.json --directory=app-build
+
           expect {
-            -re {(?i)key password.*:} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
-            -re {(?i)password.*:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Do you want Bubblewrap to install the JDK} { send "n\r"; exp_continue }
-            -re {Do you want Bubblewrap to install Android SDK} { send "n\r"; exp_continue }
-            -re {create it now} { send "\r"; exp_continue }
-            -re {create one now} { send "\r"; exp_continue }
-            -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "n\r"; exp_continue }
-            -re {\?[^\r\n]*:} { send "\r"; exp_continue }
-            -re {ERROR|Error:} { exit 1 }
-            timeout { exit 1 }
-            eof
-          }'
-          test -f app-build/twa-manifest.json
-          test -f app-build/gradlew
+            -re {Do you want Bubblewrap to install the JDK.*\(Y/n\)} {
+              send "n\r"; exp_continue
+            }
+            -re {Do you want Bubblewrap to install Android SDK.*\(Y/n\)} {
+              send "n\r"; exp_continue
+            }
+            -re {Directory .* does not exist\. Do you want to create it now.*\(Y/n\)} {
+              send "y\r"; exp_continue
+            }
+            -re {Domain:} {
+              send "\r"; exp_continue
+            }
+            -re {URL path:} {
+              send "\r"; exp_continue
+            }
+            -re {Application name:} {
+              send "\r"; exp_continue
+            }
+            -re {Short name:} {
+              send "\r"; exp_continue
+            }
+            -re {Package ID:} {
+              send "\r"; exp_continue
+            }
+            -re {Version code:} {
+              send "\r"; exp_continue
+            }
+            -re {Display mode:} {
+              send "\r"; exp_continue
+            }
+            -re {Orientation:} {
+              send "\r"; exp_continue
+            }
+            -re {Theme color:} {
+              send "\r"; exp_continue
+            }
+            -re {Background color:} {
+              send "\r"; exp_continue
+            }
+            -re {Icon URL:} {
+              send "\r"; exp_continue
+            }
+            -re {Maskable icon URL:} {
+              send "\r"; exp_continue
+            }
+            -re {Monochrome icon URL:} {
+              send "\r"; exp_continue
+            }
+            -re {.*shortcuts.*\(Y/n\)} {
+              send "\r"; exp_continue
+            }
+            -re {.*Play Billing.*\(y/N\)} {
+              send "n\r"; exp_continue
+            }
+            -re {.*location delegation.*\(y/N\)} {
+              send "n\r"; exp_continue
+            }
+            -re {Key path:} {
+              send "\r"; exp_continue
+            }
+            -re {Key alias:} {
+              send "\r"; exp_continue
+            }
+            -re {.*create.*signing key.*\(Y/n\)} {
+              send "y\r"; exp_continue
+            }
+            -re {Full name:} {
+              send "PUTRAJAYA\r"; exp_continue
+            }
+            -re {Organizational Unit:} {
+              send "PUTRAJAYA\r"; exp_continue
+            }
+            -re {Organization:} {
+              send "PUTRAJAYA\r"; exp_continue
+            }
+            -re {Country code:} {
+              send "ID\r"; exp_continue
+            }
+            -re {Keystore password:} {
+              send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue
+            }
+            -re {Key password:} {
+              send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue
+            }
+            -re {ERROR|Error:} {
+              puts "Bubblewrap init reported an error."; exit 1
+            }
+            timeout {
+              puts "Bubblewrap init timed out."; exit 1
+            }
+            eof {
+              set result [wait]
+              set code [lindex $result 3]
+              if {$code != 0} {
+                puts "Bubblewrap init exited with code $code"
+                exit $code
+              }
+            }
+          }
+          EXPECT_SCRIPT
+
+          test -s app-build/twa-manifest.json
+          test -x app-build/gradlew || chmod +x app-build/gradlew
           echo "Bubblewrap init berhasil."
 
       - name: Build APK
@@ -105,7 +195,7 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ env.BUBBLEWRAP_KEYSTORE_PASSWORD }}
           BUBBLEWRAP_KEY_PASSWORD: ${{ env.BUBBLEWRAP_KEY_PASSWORD }}
         run: |
-          test -f twa-manifest.json
+          test -s twa-manifest.json
           test -f gradlew
           chmod +x gradlew
           bubblewrap build --skipPwaValidation
