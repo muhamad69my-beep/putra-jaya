@@ -1805,6 +1805,7 @@ function pjApplyRealtimeChange(tableName,payload){
       else{const item=moveFromRemote(newRow);const i=db.moves.findIndex(m=>String(m.id)===String(item.id));if(i>=0)db.moves[i]=item;else db.moves.push(item);}
     }else if(tableName==='putrajaya_appdata'){
       const key=newRow?newRow.key:(oldRow?oldRow.key:null);
+      if(key==='employeesUsers'){ if(evt!=='DELETE'&&newRow)applyRemoteEmployeesUsers(newRow.value); return; }
       if(!key||!PJ_MISC_KEYS.includes(key))return;
       if(evt==='DELETE'){/* penghapusan baris appdata jarang terjadi, diabaikan */}
       else{db[key]=newRow.value;}
@@ -1855,21 +1856,57 @@ function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.
 // --- SINKRON DATA LAINNYA (Riwayat Aktivitas, Kategori, Hutang, Pengeluaran,
 // Catatan Belanja, Setoran, Pengaturan, dll) — disimpan sebagai satu baris JSON
 // per jenis data di tabel putrajaya_appdata, supaya semua fitur ikut 2 arah. ---
-const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings'];
+const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings','employeesUsers'];
 async function syncMiscOnline(){
   if(!navigator.onLine)return;
-  const rows=PJ_MISC_KEYS.map(k=>({key:k,value:(db[k]===undefined?null:db[k]),updated_at:new Date().toISOString()}));
+  const rows=PJ_MISC_KEYS.map(k=>({key:k,value:(k==='employeesUsers'?users:(db[k]===undefined?null:db[k])),updated_at:new Date().toISOString()}));
   await apiUpsert('putrajaya_appdata',rows);
+}
+// --- SINKRON AKUN & HAK AKSES KARYAWAN (real-time, banyak HP) ---
+// Disimpan sebagai satu baris JSON di tabel putrajaya_appdata (key='employeesUsers'),
+// memakai jalur realtime yang sama dengan data lain supaya perubahan di 1 HP
+// langsung muncul di HP lain dalam hitungan detik.
+async function syncEmployeesOnline(){
+  if(!navigator.onLine)return;
+  try{ await apiUpsert('putrajaya_appdata',[{key:'employeesUsers',value:users,updated_at:new Date().toISOString()}]); }
+  catch(e){ console.warn('Gagal sinkron akun karyawan ke online',e); toast('Perubahan tersimpan di HP ini. Sinkron online gagal (cek koneksi).'); }
+}
+function applyRemoteEmployeesUsers(value){
+  if(!value)return;
+  users=value;
+  localStorage.setItem(USERKEY,JSON.stringify(users));
+  if(session && session.role!=='admin'){
+    const me=(users.employees||[]).find(x=>x.username===session.username);
+    if(!me||me.active===false){
+      alert('Akun Anda telah dinonaktifkan atau dihapus oleh Admin.');
+      logout();
+      return;
+    }
+  }
+  applyRole();
+  if(document.getElementById('permissionEmployeeList'))renderEmployeePermissions();
 }
 async function pullMiscFromCloud(){
   if(!navigator.onLine)return false;
   try{
     const rows=await apiGet('putrajaya_appdata');
     if(!rows.length)return false;
-    rows.forEach(r=>{ if(PJ_MISC_KEYS.includes(r.key) && r.value!==null) db[r.key]=r.value; });
+    rows.forEach(r=>{
+      if(r.key==='employeesUsers'){ if(r.value)applyRemoteEmployeesUsers(r.value); return; }
+      if(PJ_MISC_KEYS.includes(r.key) && r.value!==null) db[r.key]=r.value;
+    });
     localStorage.setItem(KEY,JSON.stringify(db));
     return true;
   }catch(e){console.warn('Gagal menarik data lain dari cloud',e);return false;}
+}
+// Seed data karyawan ke server HANYA dari sesi Admin (agar HP karyawan
+// tidak bisa menimpa data Admin dengan data lokalnya yang lama/kosong).
+async function seedEmployeesOnlineIfEmpty(){
+  if(!navigator.onLine)return;
+  try{
+    const rows=await apiGet('putrajaya_appdata','select=key&key=eq.employeesUsers');
+    if(!rows.length) await syncEmployeesOnline();
+  }catch(e){console.warn('Gagal cek/seed data karyawan online',e);}
 }
 async function restoreFromCloud(){
   if(!navigator.onLine)return false;
@@ -1995,7 +2032,9 @@ async function doLogin(e){
   if(local && local.password===p && local.active!==false){
     session={username:u,role:local.role,name:local.name||u};
     localStorage.setItem(SESSIONKEY,JSON.stringify(session));
-    loginError.style.display='none';loginOverlay.style.display='none';applyRole();page('home');return false;
+    loginError.style.display='none';loginOverlay.style.display='none';applyRole();page('home');
+    if(local.role==='admin')seedEmployeesOnlineIfEmpty();
+    return false;
   }
   // Jika tidak ditemukan secara lokal, coba akun dari database online.
   try{
@@ -2159,7 +2198,19 @@ function canAdmin(){return session&&session.role==='admin'}
 // Fitur berikut dianggap tidak terlalu penting untuk diatur per-karyawan,
 // jadi selalu diizinkan (tidak lagi ada toggle-nya di Hak Akses Karyawan).
 const ALWAYS_ALLOWED_PERMISSIONS=['Tambah Barang','Catatan Belanja','Barang Masuk','Barang Keluar','Transfer','Stok Menipis','Lihat Harga Modal','Lihat Laba','Lihat Uang Keluar','Tambah/Edit Uang Keluar','Hapus Uang Keluar','Tutup Hari'];
-function hasPermission(name){if(canAdmin())return true;if(ALWAYS_ALLOWED_PERMISSIONS.includes(name))return true;const u=getCurrentUser();return !!(u&&u.active!==false&&u.permissions&&u.permissions[name]===true)}
+function hasPermission(name){
+  if(canAdmin())return true;
+  if(ALWAYS_ALLOWED_PERMISSIONS.includes(name))return true;
+  const u=getCurrentUser();
+  if(!u||u.active===false)return false;
+  const val=u.permissions&&u.permissions[name];
+  if(typeof val==='boolean')return val;
+  // Izin navigasi (NAV Beranda/Produk/Transaksi/dll) default AKTIF selama
+  // belum pernah diatur eksplisit oleh Admin, supaya menu tidak tiba-tiba
+  // hilang hanya karena belum sempat disimpan lewat "Atur Hak Akses".
+  if(typeof NAV_PERMISSIONS!=='undefined' && NAV_PERMISSIONS.includes(name))return true;
+  return false;
+}
 function requirePermission(name){if(hasPermission(name))return true;alert('Anda tidak memiliki izin untuk membuka menu ini.');return false}
 function requireAdmin(){if(canAdmin())return true;alert('Menu ini hanya untuk Admin.');return false}
 function applyRole(){
@@ -3760,7 +3811,7 @@ function refreshReport(){
      </div>
    </div>`;
 }
-function saveUsersLocal(){localStorage.setItem(USERKEY,JSON.stringify(users));}
+function saveUsersLocal(){localStorage.setItem(USERKEY,JSON.stringify(users));syncEmployeesOnline();}
 function renderSettings(){
  if(!requirePermission('Pengaturan'))return false;
  app.innerHTML='';
