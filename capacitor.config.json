@@ -2,5 +2,10 @@
   "appId": "com.putrajaya.app",
   "appName": "Putra Jaya",
   "webDir": "www",
-  "bundledWebRuntime": false
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://muhamad69my-beep.github.io/putra-jaya/",
+    "allowNavigation": ["*.supabase.co"],
+    "cleartext": false
+  }
 }
