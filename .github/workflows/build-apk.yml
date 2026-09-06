@@ -96,7 +96,8 @@ jobs:
           expect {
             -re {Do you want Bubblewrap to install the JDK.*\(Y/n\)} { send "n\r"; exp_continue }
             -re {Do you want Bubblewrap to install Android SDK.*\(Y/n\)} { send "n\r"; exp_continue }
-            -re {Directory .* does not exist\. Do you want to create it now.*\(Y/n\)} { send "y\r"; exp_continue }
+            -re {Directory .* does not exist\.[[:space:]]+Do you want to create it now\?.*\(Y/n\)} { send "y\r"; exp_continue }
+            -re {Directory .* does not exist\.[[:space:]]+Do you want to create it now\?} { send "y\r"; exp_continue }
             -re {Domain:} { send "\r"; exp_continue }
             -re {URL path:} { send "\r"; exp_continue }
             -re {Application name:} { send "\r"; exp_continue }
@@ -116,6 +117,7 @@ jobs:
             -re {Key path:} { send "\r"; exp_continue }
             -re {Key alias:} { send "\r"; exp_continue }
             -re {.*create.*signing key.*\(Y/n\)} { send "y\r"; exp_continue }
+            -re {.*Do you want to create one now.*\(Y/n\)} { send "y\r"; exp_continue }
             -re {Full name:} { send "PUTRAJAYA\r"; exp_continue }
             -re {Organizational Unit:} { send "PUTRAJAYA\r"; exp_continue }
             -re {Organization:} { send "PUTRAJAYA\r"; exp_continue }
