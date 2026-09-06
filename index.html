@@ -1860,8 +1860,25 @@ function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.
 const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings','employeesUsers'];
 async function syncMiscOnline(){
   if(!navigator.onLine)return;
+  // PATCH: sebelum kirim data lain (Riwayat Aktivitas, Notifikasi, Pengeluaran,
+  // Setoran, dll) ke server, GABUNGKAN dulu dengan data yang sudah ada di server.
+  // Tanpa ini, kalau 2 HP menyimpan hampir bersamaan, HP yang menyimpan belakangan
+  // akan MENIMPA HABIS data HP lain (karena tiap key disimpan sebagai satu blok
+  // JSON utuh) — itu sebabnya aktivitas/notifikasi yang dibuat karyawan bisa hilang
+  // atau tidak pernah terlihat di HP lain.
+  try{
+    const remoteRows=await apiGet('putrajaya_appdata');
+    const remoteMap={};remoteRows.forEach(r=>{remoteMap[r.key]=r.value});
+    PJ_ID_KEYED_MISC.forEach(k=>{if(remoteMap[k]!==undefined&&remoteMap[k]!==null)db[k]=pjMergeById(db[k],remoteMap[k],'id')});
+    if(remoteMap.categories!=null)db.categories=pjMergeStrings(db.categories,remoteMap.categories);
+    if(remoteMap.dayClosings!=null)db.dayClosings=pjMergeById(db.dayClosings,remoteMap.dayClosings,'tanggal');
+    if(remoteMap.payments!=null)db.payments=Object.assign({},remoteMap.payments||{},db.payments||{});
+    if(remoteMap.settings!=null)db.settings=Object.assign({},remoteMap.settings||{},db.settings||{});
+  }catch(e){console.warn('Gagal ambil data lain sebelum sinkron (tetap lanjut kirim versi lokal)',e);}
   const rows=PJ_MISC_KEYS.map(k=>({key:k,value:(k==='employeesUsers'?users:(db[k]===undefined?null:db[k])),updated_at:new Date().toISOString()}));
   await apiUpsert('putrajaya_appdata',rows);
+  localStorage.setItem(KEY,JSON.stringify(db));
+  if(typeof pjRefreshCurrentView==='function')pjRefreshCurrentView();
 }
 // --- SINKRON AKUN & HAK AKSES KARYAWAN (real-time, banyak HP) ---
 // Disimpan sebagai satu baris JSON di tabel putrajaya_appdata (key='employeesUsers'),
