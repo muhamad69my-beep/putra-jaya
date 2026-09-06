@@ -39,7 +39,14 @@ jobs:
       - name: Install Bubblewrap
         run: |
           npm install -g @bubblewrap/cli
-          bubblewrap --version
+          expect -c '
+          set timeout 120
+          spawn bubblewrap --version
+          expect {
+            -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
+            -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
+            eof
+          }'
 
       - name: Configure Bubblewrap JDK and Android SDK
         run: |
