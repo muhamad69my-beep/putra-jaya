@@ -1,0 +1,6 @@
+{
+  "appId": "com.putrajaya.app",
+  "appName": "Putra Jaya",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
