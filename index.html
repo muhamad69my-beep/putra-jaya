@@ -1811,6 +1811,7 @@ function pjApplyRealtimeChange(tableName,payload){
       else{db[key]=newRow.value;}
     }
     localStorage.setItem(KEY,JSON.stringify(db));
+    if(typeof pjRefreshCurrentView==='function')pjRefreshCurrentView();
   }catch(e){console.warn('Gagal terapkan perubahan realtime',e);}
 }
 if(pjSbClient){
@@ -1885,6 +1886,7 @@ function applyRemoteEmployeesUsers(value){
   }
   applyRole();
   if(document.getElementById('permissionEmployeeList'))renderEmployeePermissions();
+  if(typeof pjRefreshCurrentView==='function')pjRefreshCurrentView();
 }
 async function pullMiscFromCloud(){
   if(!navigator.onLine)return false;
@@ -2007,6 +2009,7 @@ async function pjMergePullAll(){
     ['pengeluaranArsipTotal','setoranArsipTotal','salesTunaiArsipTotal'].forEach(k=>{if(remoteMap[k]!=null)db[k]=remoteMap[k]});
     localStorage.setItem(KEY,JSON.stringify(db));
     localStorage.setItem(LASTSYNCKEY,new Date().toISOString());
+    if(typeof pjRefreshCurrentView==='function')pjRefreshCurrentView();
   }catch(e){console.warn('Auto-pull gagal',e);}
 }
 // Tarik data terbaru: tiap 2 menit selagi app terbuka, dan setiap kali
@@ -2386,7 +2389,32 @@ function toggleMenu(e){
 function closeMenu(){document.getElementById('mainNav')?.classList.remove('show')}
 document.addEventListener('click',e=>{if(!e.target.closest('#mainNav')&&!e.target.closest('#menuBtn'))closeMenu()});
 function nav(x){document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));let n=document.getElementById('n-'+x);if(n)n.classList.add('active')}
-function page(x,productFilter=''){if(!session)return;const perms={home:'Dashboard',products:'Tambah Barang',shopping:'Catatan Belanja',sales:'Penjualan',omzet:'Penjualan',salesHistory:'Penjualan',moveCatalogOut:'Barang Keluar',lowstock:'Stok Menipis',history:'Riwayat',activity:'Riwayat Aktivitas',reports:'Laporan',backup:'Backup & Restore',settings:'Pengaturan'};if(perms[x]&&!requirePermission(perms[x]))return;nav(x);if(x==='products')renderProducts(productFilter);else if(x==='shopping')renderShoppingNotes();else if(x==='sales'||x==='omzet')renderSalesReport();else if(x==='salesHistory')renderSalesHistory();else if(x==='stocklocations')renderStockLocations();else if(x==='lowstock')renderLowStock();else if(x==='history')renderHistory();else if(x==='activity')renderActivityHistory();else if(x==='reports')renderReports();else if(x==='backup')renderBackup();else if(x==='akunSaya')renderAkunSaya();else if(x==='settings')renderSettings();else if(x==='moveCatalogOut')renderMoveCatalog('out');else renderHome()}
+function page(x,productFilter=''){if(!session)return;const perms={home:'Dashboard',products:'Tambah Barang',shopping:'Catatan Belanja',sales:'Penjualan',omzet:'Penjualan',salesHistory:'Penjualan',moveCatalogOut:'Barang Keluar',lowstock:'Stok Menipis',history:'Riwayat',activity:'Riwayat Aktivitas',reports:'Laporan',backup:'Backup & Restore',settings:'Pengaturan'};if(perms[x]&&!requirePermission(perms[x]))return;window.__pjCurrentPage=x;window.__pjCurrentProductFilter=productFilter;nav(x);if(x==='products')renderProducts(productFilter);else if(x==='shopping')renderShoppingNotes();else if(x==='sales'||x==='omzet')renderSalesReport();else if(x==='salesHistory')renderSalesHistory();else if(x==='stocklocations')renderStockLocations();else if(x==='lowstock')renderLowStock();else if(x==='history')renderHistory();else if(x==='activity')renderActivityHistory();else if(x==='reports')renderReports();else if(x==='backup')renderBackup();else if(x==='akunSaya')renderAkunSaya();else if(x==='settings')renderSettings();else if(x==='moveCatalogOut')renderMoveCatalog('out');else renderHome()}
+// PATCH: refresh tampilan yang sedang dibuka setiap kali ada data baru masuk
+// dari sinkron online (auto-pull berkala maupun real-time), supaya user tidak
+// perlu klik "Pulihkan Data dari Cloud" atau reload manual untuk melihat data terbaru.
+function pjRefreshCurrentView(){
+  try{
+    if(!session)return;
+    const x=window.__pjCurrentPage;
+    if(!x)return;
+    if(x==='products')renderProducts(window.__pjCurrentProductFilter||'');
+    else if(x==='shopping')renderShoppingNotes();
+    else if(x==='sales'||x==='omzet')renderSalesReport();
+    else if(x==='salesHistory')renderSalesHistory();
+    else if(x==='stocklocations')renderStockLocations();
+    else if(x==='lowstock')renderLowStock();
+    else if(x==='history')renderHistory();
+    else if(x==='activity')renderActivityHistory();
+    else if(x==='reports')renderReports();
+    else if(x==='backup')renderBackup();
+    else if(x==='akunSaya')renderAkunSaya();
+    else if(x==='settings')renderSettings();
+    else if(x==='moveCatalogOut')renderMoveCatalog('out');
+    else if(x==='home')renderHome();
+    if(typeof updateNotifBadge==='function')updateNotifBadge();
+  }catch(e){console.warn('Gagal refresh tampilan otomatis',e);}
+}
 function renderHome(){
  const d=today();
  const t=totals();
