@@ -5,6 +5,7 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <title>PUTRAJAYA 2</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="./manifest.json" rel="manifest"/>
 <link href="./icon-192.png" rel="icon" sizes="192x192" type="image/png"/>
 <link href="./icon-512.png" rel="icon" sizes="512x512" type="image/png"/>
@@ -1790,6 +1791,34 @@ function productStockLinePlain(p){return LOCATION_NAMES.map(l=>locLabel(l)+' '+s
 
 const SUPABASE_URL='https://wdvgueloiqulgexmecps.supabase.co';
 const SUPABASE_KEY='sb_publishable_ARQ6eE3ZGxAS6rdvRmBPGA_OI_e0cC7';
+// --- REALTIME: begitu ada perubahan data di HP mana pun, HP lain langsung
+// dapat update dalam hitungan detik (tanpa nunggu auto-pull berkala). ---
+const pjSbClient=(typeof window.supabase!=='undefined')?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
+function pjApplyRealtimeChange(tableName,payload){
+  try{
+    const evt=payload.eventType,newRow=payload.new,oldRow=payload.old;
+    if(tableName==='putrajaya_products'){
+      if(evt==='DELETE'){db.products=db.products.filter(p=>String(p.id)!==String(oldRow.id));}
+      else{const item=productFromRemote(newRow);const i=db.products.findIndex(p=>String(p.id)===String(item.id));if(i>=0)db.products[i]=item;else db.products.push(item);}
+    }else if(tableName==='putrajaya_moves'){
+      if(evt==='DELETE'){db.moves=db.moves.filter(m=>String(m.id)!==String(oldRow.id));}
+      else{const item=moveFromRemote(newRow);const i=db.moves.findIndex(m=>String(m.id)===String(item.id));if(i>=0)db.moves[i]=item;else db.moves.push(item);}
+    }else if(tableName==='putrajaya_appdata'){
+      const key=newRow?newRow.key:(oldRow?oldRow.key:null);
+      if(!key||!PJ_MISC_KEYS.includes(key))return;
+      if(evt==='DELETE'){/* penghapusan baris appdata jarang terjadi, diabaikan */}
+      else{db[key]=newRow.value;}
+    }
+    localStorage.setItem(KEY,JSON.stringify(db));
+  }catch(e){console.warn('Gagal terapkan perubahan realtime',e);}
+}
+if(pjSbClient){
+  pjSbClient.channel('pj-realtime-sync')
+    .on('postgres_changes',{event:'*',schema:'public',table:'putrajaya_products'},p=>pjApplyRealtimeChange('putrajaya_products',p))
+    .on('postgres_changes',{event:'*',schema:'public',table:'putrajaya_moves'},p=>pjApplyRealtimeChange('putrajaya_moves',p))
+    .on('postgres_changes',{event:'*',schema:'public',table:'putrajaya_appdata'},p=>pjApplyRealtimeChange('putrajaya_appdata',p))
+    .subscribe();
+}
 const isUUID=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v||''));
 const newId=()=>crypto?.randomUUID?crypto.randomUUID():(Date.now().toString(16)+'-'+Math.random().toString(16).slice(2));
 async function apiGet(table,query='select=*'){
