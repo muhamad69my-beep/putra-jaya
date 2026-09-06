@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-env:
-  BUBBLEWRAP_JDK_PATH: ${{ env.JAVA_HOME }}
-  BUBBLEWRAP_ANDROID_SDK_PATH: ${{ env.ANDROID_HOME }}
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -34,6 +30,8 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
 
       - name: Install Expect
         run: |
@@ -51,10 +49,7 @@ jobs:
           printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
           cat "$HOME/.bubblewrap/config.json"
           test -x "$JAVA_HOME/bin/java"
-          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" || true
-          bubblewrap updateConfig \
-            --jdkPath="$JAVA_HOME" \
-            --androidSdkPath="$ANDROID_HOME"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
       - name: Check Bubblewrap configuration
         run: bubblewrap doctor
