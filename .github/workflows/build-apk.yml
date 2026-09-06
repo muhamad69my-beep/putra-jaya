@@ -32,6 +32,7 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
+          packages: platform-tools
 
       - name: Install Expect
         run: |
@@ -64,37 +65,37 @@ jobs:
         run: |
           rm -rf app-build
           expect -c '
-          set timeout 180
+          set timeout 600
+          log_user 1
           spawn bubblewrap init --manifest=https://muhamad69my-beep.github.io/putra-jaya/manifest.json --directory=app-build
           expect {
             -re {Do you want Bubblewrap to install the JDK} { send "n\r"; exp_continue }
             -re {Do you want Bubblewrap to install Android SDK} { send "n\r"; exp_continue }
-            -re {\? Directory .* \(Y/n\)} { send "\r"; exp_continue }
-            -re {\? Domain:} { send "\r"; exp_continue }
-            -re {\? URL path:} { send "\r"; exp_continue }
-            -re {\? Application name:} { send "\r"; exp_continue }
-            -re {\? Short name:} { send "\r"; exp_continue }
-            -re {\? Package ID:} { send "\r"; exp_continue }
-            -re {\? Version code:} { send "\r"; exp_continue }
-            -re {\? Display mode:} { send "\r"; exp_continue }
-            -re {\? Orientation:} { send "\r"; exp_continue }
-            -re {\? Theme color:} { send "\r"; exp_continue }
-            -re {\? Background color:} { send "\r"; exp_continue }
-            -re {\? Icon URL:} { send "\r"; exp_continue }
-            -re {\? Maskable icon URL:} { send "\r"; exp_continue }
-            -re {\? Monochrome icon URL:} { send "\r"; exp_continue }
-            -re {\? .*shortcuts.*\(Y/n\)} { send "\r"; exp_continue }
-            -re {\? .*Play Billing.*\(y/N\)} { send "\r"; exp_continue }
-            -re {\? .*location delegation.*\(y/N\)} { send "\r"; exp_continue }
-            -re {\? Key path:} { send "\r"; exp_continue }
-            -re {\? Key alias:} { send "\r"; exp_continue }
-            -re {\? .*create.*signing key.*\(Y/n\)} { send "\r"; exp_continue }
-            -re {\? Full name:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {\? Organizational Unit:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {\? Organization:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {\? Country code:} { send "ID\r"; exp_continue }
-            -re {\? Keystore password:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {\? Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {create it now} { send "\r"; exp_continue }
+            -re {\(Y/n\)} { send "\r"; exp_continue }
+            -re {\(y/N\)} { send "n\r"; exp_continue }
+            -re {Application name} { send "\r"; exp_continue }
+            -re {Short name} { send "\r"; exp_continue }
+            -re {Package ID} { send "\r"; exp_continue }
+            -re {Version code} { send "\r"; exp_continue }
+            -re {Display mode} { send "\r"; exp_continue }
+            -re {Orientation} { send "\r"; exp_continue }
+            -re {Theme color} { send "\r"; exp_continue }
+            -re {Background color} { send "\r"; exp_continue }
+            -re {Icon URL} { send "\r"; exp_continue }
+            -re {Maskable icon URL} { send "\r"; exp_continue }
+            -re {Monochrome icon URL} { send "\r"; exp_continue }
+            -re {shortcuts} { send "\r"; exp_continue }
+            -re {Play Billing} { send "n\r"; exp_continue }
+            -re {location delegation} { send "n\r"; exp_continue }
+            -re {Key path} { send "\r"; exp_continue }
+            -re {Key alias} { send "\r"; exp_continue }
+            -re {Full name} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Organizational Unit} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Organization} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Country code} { send "ID\r"; exp_continue }
+            -re {Keystore password} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
+            -re {Key password} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
             -re {ERROR|Error:} { exit 1 }
             timeout { exit 1 }
             eof
@@ -115,6 +116,7 @@ jobs:
           bubblewrap build --skipPwaValidation
 
       - name: Cari APK
+        if: always()
         run: find . -type f -iname "*.apk" -print
 
       - name: Siapkan APK
