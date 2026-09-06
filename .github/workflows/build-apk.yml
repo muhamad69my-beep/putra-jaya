@@ -56,13 +56,8 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME"
           echo "ANDROID_HOME=$ANDROID_HOME"
           mkdir -p "$HOME/.bubblewrap"
-
-          # Bubblewrap's AndroidSdkTools still validates the SDK by looking
-          # for the legacy bin/sdkmanager location. GitHub's SDK exposes it
-          # under cmdline-tools/latest/bin, so provide a compatibility link.
           rm -rf "$ANDROID_HOME/bin"
           ln -s "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/bin"
-
           printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
           cat "$HOME/.bubblewrap/config.json"
           test -x "$JAVA_HOME/bin/java"
@@ -90,8 +85,8 @@ jobs:
             -re {Do you want Bubblewrap to install the JDK} { send "n\r"; exp_continue }
             -re {Do you want Bubblewrap to install Android SDK} { send "n\r"; exp_continue }
             -re {create it now} { send "\r"; exp_continue }
-            -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "n\r"; exp_continue }
+            -re {Domain:} { send "\r"; exp_continue }
+            -re {URL path:} { send "\r"; exp_continue }
             -re {Application name} { send "\r"; exp_continue }
             -re {Short name} { send "\r"; exp_continue }
             -re {Package ID} { send "\r"; exp_continue }
@@ -113,7 +108,7 @@ jobs:
             -re {Organization} { send "PUTRAJAYA\r"; exp_continue }
             -re {Country code} { send "ID\r"; exp_continue }
             -re {Keystore password} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Key password} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {Key password} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
             -re {ERROR|Error:} { exit 1 }
             timeout { exit 1 }
             eof
