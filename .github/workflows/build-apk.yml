@@ -5,9 +5,15 @@ on:
   push:
     paths:
       - '.github/workflows/build-apk.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
       - 'manifest.json'
       - 'sw.js'
       - 'index.html'
+      - 'icon.png'
+      - 'icon-192.png'
+      - 'icon-512.png'
 
 permissions:
   contents: write
@@ -15,10 +21,6 @@ permissions:
 concurrency:
   group: putra-jaya-apk-build
   cancel-in-progress: true
-
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
   build:
@@ -28,142 +30,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
       - name: Setup Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify runner Android SDK
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prepare web files
         shell: bash
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          test -d "$ANDROID_HOME"
-          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
+          rm -rf www
+          mkdir -p www
+          cp index.html manifest.json sw.js www/
+          cp icon.png icon-192.png icon-512.png www/
+          test -s www/index.html
+          test -s www/manifest.json
 
-      - name: Install Android build dependencies
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
         shell: bash
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-          test -d "$ANDROID_HOME/platforms/android-35"
-          test -d "$ANDROID_HOME/build-tools/35.0.0"
-
-      - name: Install Expect
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y expect
-          command -v expect
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
-      - name: Configure Bubblewrap JDK and Android SDK
-        shell: bash
-        run: |
-          mkdir -p "$HOME/.bubblewrap"
-          printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
-          cat "$HOME/.bubblewrap/config.json"
-          test -x "$JAVA_HOME/bin/java"
-          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
-      - name: Check Bubblewrap configuration
-        shell: bash
-        run: |
-          if ! bubblewrap doctor; then
-            echo "Bubblewrap doctor menolak path SDK runner; lanjutkan karena sdkmanager dan build-tools sudah diverifikasi."
-            echo "Isi Android SDK yang relevan:"
-            ls -ld "$ANDROID_HOME" "$ANDROID_HOME/cmdline-tools/latest" "$ANDROID_HOME/platforms/android-35" "$ANDROID_HOME/build-tools/35.0.0"
-          fi
-
-      - name: Generate temporary signing passwords
-        run: |
-          PASSWORD=$(openssl rand -hex 24)
-          echo "BUBBLEWRAP_KEYSTORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
-          echo "BUBBLEWRAP_KEY_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
-
-      - name: Init project
-        shell: bash
-        run: |
-          rm -rf app-build
-          mkdir -p app-build
-          expect <<'EXPECT_SCRIPT'
-          set timeout 300
-          log_user 1
-          spawn bubblewrap init --manifest=https://muhamad69my-beep.github.io/putra-jaya/manifest.json --directory=app-build
-          expect {
-            -re {Do you want Bubblewrap to install the JDK.*\(Y/n\)} { send "n\r"; exp_continue }
-            -re {Do you want Bubblewrap to install Android SDK.*\(Y/n\)} { send "n\r"; exp_continue }
-            -re {Domain:} { send "\r"; exp_continue }
-            -re {URL path:} { send "\r"; exp_continue }
-            -re {Application name:} { send "\r"; exp_continue }
-            -re {Short name:} { send "\r"; exp_continue }
-            -re {Application ID:} { send "\r"; exp_continue }
-            -re {Package ID:} { send "\r"; exp_continue }
-            -re {Version code:} { send "\r"; exp_continue }
-            -re {Display mode:} { send "\r"; exp_continue }
-            -re {Orientation:} { send "\r"; exp_continue }
-            -re {Theme color:} { send "\r"; exp_continue }
-            -re {Background color:} { send "\r"; exp_continue }
-            -re {Icon URL:} { send "\r"; exp_continue }
-            -re {Maskable icon URL:} { send "\r"; exp_continue }
-            -re {Monochrome icon URL:} { send "\r"; exp_continue }
-            -re {.*shortcuts.*\(Y/n\)} { send "\r"; exp_continue }
-            -re {.*Play Billing.*\(y/N\)} { send "n\r"; exp_continue }
-            -re {.*location delegation.*\(y/N\)} { send "n\r"; exp_continue }
-            -re {Key store location:} { send "\r"; exp_continue }
-            -re {Key path:} { send "\r"; exp_continue }
-            -re {Key alias:} { send "\r"; exp_continue }
-            -re {.*create.*signing key.*\(Y/n\)} { send "y\r"; exp_continue }
-            -re {.*Do you want to create one now.*\(Y/n\)} { send "y\r"; exp_continue }
-            -re {First and Last names.*:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {Organizational Unit.*:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {Organization.*:} { send "PUTRAJAYA\r"; exp_continue }
-            -re {Country code.*:} { send "ID\r"; exp_continue }
-            -re {Keystore password.*:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Key password.*:} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
-            -re {ERROR|Error:} { puts "Bubblewrap init reported an error."; exit 1 }
-            timeout { puts "Bubblewrap init timed out."; exit 1 }
-            eof {
-              set result [wait]
-              set code [lindex $result 3]
-              if {$code != 0} { puts "Bubblewrap init exited with code $code"; exit $code }
-            }
-          }
-          EXPECT_SCRIPT
-          test -s app-build/twa-manifest.json
-          test -f app-build/gradlew
-          chmod +x app-build/gradlew
-
-      - name: Build APK
-        working-directory: app-build
-        env:
-          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ env.BUBBLEWRAP_KEYSTORE_PASSWORD }}
-          BUBBLEWRAP_KEY_PASSWORD: ${{ env.BUBBLEWRAP_KEY_PASSWORD }}
-        run: |
-          test -s twa-manifest.json
-          test -f gradlew
           chmod +x gradlew
-          bubblewrap build --skipPwaValidation
+          ./gradlew --no-daemon assembleDebug
 
-      - name: Cari APK
+      - name: Locate APK
         if: always()
-        run: find . -type f -iname "*.apk" -print
+        shell: bash
+        run: find android/app/build/outputs -type f -iname '*.apk' -print 2>/dev/null || true
 
-      - name: Siapkan APK
+      - name: Prepare APK
+        shell: bash
         run: |
-          APK=$(find . -type f -iname "*.apk" | head -n 1)
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK TIDAK DITEMUKAN"
-            exit 1
-          fi
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
           mkdir -p apk-output
           cp "$APK" apk-output/putra-jaya.apk
           ls -lh apk-output/putra-jaya.apk
@@ -182,6 +96,6 @@ jobs:
           tag_name: apk-${{ github.run_number }}
           name: PUTRAJAYA APK ${{ github.run_number }}
           body: |
-            APK PUTRAJAYA hasil build otomatis dari GitHub Actions.
+            APK PUTRAJAYA hasil build otomatis menggunakan Capacitor.
           files: apk-output/putra-jaya.apk
           fail_on_unmatched_files: true
