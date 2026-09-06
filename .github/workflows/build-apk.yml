@@ -37,9 +37,15 @@ jobs:
       - name: Install Android build dependencies
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           sdkmanager --list_installed | sed -n '1,160p'
+
+      - name: Install Expect
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y expect
+          command -v expect
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
@@ -51,8 +57,9 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           mkdir -p "$HOME/.bubblewrap"
 
-          # Bubblewrap doctor/build expects the SDK's sdkmanager under a legacy
-          # tools/bin or bin path. GitHub's SDK uses cmdline-tools/latest/bin.
+          # Bubblewrap's AndroidSdkTools still validates the SDK by looking
+          # for the legacy bin/sdkmanager location. GitHub's SDK exposes it
+          # under cmdline-tools/latest/bin, so provide a compatibility link.
           rm -rf "$ANDROID_HOME/bin"
           ln -s "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/bin"
 
