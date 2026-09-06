@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,22 +27,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-          packages: platform-tools
+      - name: Verify runner Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -d "$ANDROID_HOME"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
       - name: Install Android build dependencies
         shell: bash
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-          sdkmanager --list_installed | sed -n '1,160p'
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list_installed | sed -n '1,160p'
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
 
       - name: Install Expect
         shell: bash
@@ -46,6 +50,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y expect
           command -v expect
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
@@ -62,8 +71,6 @@ jobs:
           cat "$HOME/.bubblewrap/config.json"
           test -x "$JAVA_HOME/bin/java"
           test -x "$ANDROID_HOME/bin/sdkmanager"
-          test -d "$ANDROID_HOME/platforms/android-35"
-          test -d "$ANDROID_HOME/build-tools/35.0.0"
 
       - name: Check Bubblewrap configuration
         run: bubblewrap doctor
@@ -82,111 +89,47 @@ jobs:
           set timeout 180
           log_user 1
           spawn bubblewrap init --manifest=https://muhamad69my-beep.github.io/putra-jaya/manifest.json --directory=app-build
-
           expect {
-            -re {Do you want Bubblewrap to install the JDK.*\(Y/n\)} {
-              send "n\r"; exp_continue
-            }
-            -re {Do you want Bubblewrap to install Android SDK.*\(Y/n\)} {
-              send "n\r"; exp_continue
-            }
-            -re {Directory .* does not exist\. Do you want to create it now.*\(Y/n\)} {
-              send "y\r"; exp_continue
-            }
-            -re {Domain:} {
-              send "\r"; exp_continue
-            }
-            -re {URL path:} {
-              send "\r"; exp_continue
-            }
-            -re {Application name:} {
-              send "\r"; exp_continue
-            }
-            -re {Short name:} {
-              send "\r"; exp_continue
-            }
-            -re {Package ID:} {
-              send "\r"; exp_continue
-            }
-            -re {Version code:} {
-              send "\r"; exp_continue
-            }
-            -re {Display mode:} {
-              send "\r"; exp_continue
-            }
-            -re {Orientation:} {
-              send "\r"; exp_continue
-            }
-            -re {Theme color:} {
-              send "\r"; exp_continue
-            }
-            -re {Background color:} {
-              send "\r"; exp_continue
-            }
-            -re {Icon URL:} {
-              send "\r"; exp_continue
-            }
-            -re {Maskable icon URL:} {
-              send "\r"; exp_continue
-            }
-            -re {Monochrome icon URL:} {
-              send "\r"; exp_continue
-            }
-            -re {.*shortcuts.*\(Y/n\)} {
-              send "\r"; exp_continue
-            }
-            -re {.*Play Billing.*\(y/N\)} {
-              send "n\r"; exp_continue
-            }
-            -re {.*location delegation.*\(y/N\)} {
-              send "n\r"; exp_continue
-            }
-            -re {Key path:} {
-              send "\r"; exp_continue
-            }
-            -re {Key alias:} {
-              send "\r"; exp_continue
-            }
-            -re {.*create.*signing key.*\(Y/n\)} {
-              send "y\r"; exp_continue
-            }
-            -re {Full name:} {
-              send "PUTRAJAYA\r"; exp_continue
-            }
-            -re {Organizational Unit:} {
-              send "PUTRAJAYA\r"; exp_continue
-            }
-            -re {Organization:} {
-              send "PUTRAJAYA\r"; exp_continue
-            }
-            -re {Country code:} {
-              send "ID\r"; exp_continue
-            }
-            -re {Keystore password:} {
-              send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue
-            }
-            -re {Key password:} {
-              send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue
-            }
-            -re {ERROR|Error:} {
-              puts "Bubblewrap init reported an error."; exit 1
-            }
-            timeout {
-              puts "Bubblewrap init timed out."; exit 1
-            }
+            -re {Do you want Bubblewrap to install the JDK.*\(Y/n\)} { send "n\r"; exp_continue }
+            -re {Do you want Bubblewrap to install Android SDK.*\(Y/n\)} { send "n\r"; exp_continue }
+            -re {Directory .* does not exist\. Do you want to create it now.*\(Y/n\)} { send "y\r"; exp_continue }
+            -re {Domain:} { send "\r"; exp_continue }
+            -re {URL path:} { send "\r"; exp_continue }
+            -re {Application name:} { send "\r"; exp_continue }
+            -re {Short name:} { send "\r"; exp_continue }
+            -re {Package ID:} { send "\r"; exp_continue }
+            -re {Version code:} { send "\r"; exp_continue }
+            -re {Display mode:} { send "\r"; exp_continue }
+            -re {Orientation:} { send "\r"; exp_continue }
+            -re {Theme color:} { send "\r"; exp_continue }
+            -re {Background color:} { send "\r"; exp_continue }
+            -re {Icon URL:} { send "\r"; exp_continue }
+            -re {Maskable icon URL:} { send "\r"; exp_continue }
+            -re {Monochrome icon URL:} { send "\r"; exp_continue }
+            -re {.*shortcuts.*\(Y/n\)} { send "\r"; exp_continue }
+            -re {.*Play Billing.*\(y/N\)} { send "n\r"; exp_continue }
+            -re {.*location delegation.*\(y/N\)} { send "n\r"; exp_continue }
+            -re {Key path:} { send "\r"; exp_continue }
+            -re {Key alias:} { send "\r"; exp_continue }
+            -re {.*create.*signing key.*\(Y/n\)} { send "y\r"; exp_continue }
+            -re {Full name:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Organizational Unit:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Organization:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Country code:} { send "ID\r"; exp_continue }
+            -re {Keystore password:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
+            -re {Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
+            -re {ERROR|Error:} { puts "Bubblewrap init reported an error."; exit 1 }
+            timeout { puts "Bubblewrap init timed out."; exit 1 }
             eof {
               set result [wait]
               set code [lindex $result 3]
-              if {$code != 0} {
-                puts "Bubblewrap init exited with code $code"
-                exit $code
-              }
+              if {$code != 0} { puts "Bubblewrap init exited with code $code"; exit $code }
             }
           }
           EXPECT_SCRIPT
-
           test -s app-build/twa-manifest.json
-          test -x app-build/gradlew || chmod +x app-build/gradlew
+          test -f app-build/gradlew
+          chmod +x app-build/gradlew
           echo "Bubblewrap init berhasil."
 
       - name: Build APK
