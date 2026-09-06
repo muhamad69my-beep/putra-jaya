@@ -118,6 +118,7 @@ jobs:
             -re {.*shortcuts.*\(Y/n\)} { send "\r"; exp_continue }
             -re {.*Play Billing.*\(y/N\)} { send "n\r"; exp_continue }
             -re {.*location delegation.*\(y/N\)} { send "n\r"; exp_continue }
+            -re {Key store location:} { send "\r"; exp_continue }
             -re {Key path:} { send "\r"; exp_continue }
             -re {Key alias:} { send "\r"; exp_continue }
             -re {.*create.*signing key.*\(Y/n\)} { send "y\r"; exp_continue }
