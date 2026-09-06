@@ -1819,7 +1819,32 @@ function pjRemoteDeleteAll(table){
   apiDeleteAll(table).catch(e=>console.warn('Gagal hapus massal online di '+table,e));
 }
 function productToRemote(p){return {id:p.id,nama:p.nama,kode:p.kode,kategori:p.kategori||null,modal:+p.modal||0,min_stock:+p.min||0,stok_toko:+p.stokT||0,stok_g1:+p.stokG1||0,stok_g2:+p.stokG2||0,stok_g3:+p.stokG3||0,stok_g4:+p.stokG4||0,foto:p.foto||null};}
-function moveToRemote(x){return {id:x.id,type:x.type,product_id:isUUID(x.productId)?x.productId:null,product:x.product,qty:+x.qty||0,date:x.date,note:x.note||null,loc:x.loc||null,unit_price:+x.unitPrice||0,discount:+x.discount||0,total:+x.total||0,laba:+x.laba||0,modal_total:+x.modalTotal||0,username:x.user||null};}
+function moveToRemote(x){return {id:x.id,no:x.no||null,type:x.type,product_id:isUUID(x.productId)?x.productId:null,product:x.product,qty:+x.qty||0,date:x.date,note:x.note||null,loc:x.loc||null,unit_price:+x.unitPrice||0,discount:+x.discount||0,total:+x.total||0,laba:+x.laba||0,modal_total:+x.modalTotal||0,username:x.user||null,payment:x.payment||null,payment_amount:+x.paymentAmount||0,cancelled:!!x.cancelled,cancelled_at:x.cancelledAt||null,cancelled_by:x.cancelledBy||null,correction_of:x.correctionOf||null};}
+// --- PEMULIHAN DATA DARI CLOUD (tarik balik dari Supabase ke HP) ---
+function productFromRemote(r){return {id:r.id,nama:r.nama,kode:r.kode,kategori:r.kategori||'',modal:+r.modal||0,min:+r.min_stock||0,stokT:+r.stok_toko||0,stokG1:+r.stok_g1||0,stokG2:+r.stok_g2||0,stokG3:+r.stok_g3||0,stokG4:+r.stok_g4||0,foto:r.foto||''};}
+function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.product_id,product:r.product,qty:+r.qty||0,date:r.date,note:r.note||'',loc:r.loc||'',unitPrice:+r.unit_price||0,discount:+r.discount||0,total:+r.total||0,laba:+r.laba||0,modalTotal:+r.modal_total||0,user:r.username||'-',payment:r.payment||'-',paymentAmount:+r.payment_amount||0,cancelled:!!r.cancelled,cancelledAt:r.cancelled_at||null,cancelledBy:r.cancelled_by||null,correctionOf:r.correction_of||null};}
+async function restoreFromCloud(){
+  if(!navigator.onLine)return false;
+  try{
+    const [remoteProducts,remoteMoves]=await Promise.all([apiGet('putrajaya_products'),apiGet('putrajaya_moves')]);
+    if(!remoteProducts.length && !remoteMoves.length)return false;
+    db.products=remoteProducts.map(productFromRemote);
+    db.moves=remoteMoves.map(moveFromRemote);
+    localStorage.setItem(KEY,JSON.stringify(db));
+    localStorage.setItem(LASTSYNCKEY,new Date().toISOString());
+    return true;
+  }catch(e){console.warn('Gagal memulihkan data dari cloud',e);return false;}
+}
+window.pjRestoreFromCloud=restoreFromCloud;
+document.addEventListener('DOMContentLoaded',async function(){
+  try{
+    const kosong=(!db.products||db.products.length===0)&&(!db.moves||db.moves.length===0);
+    if(kosong&&navigator.onLine){
+      const ok=await restoreFromCloud();
+      if(ok)location.reload();
+    }
+  }catch(e){console.warn(e);}
+});
 const LASTSYNCKEY='putrajaya_last_online_sync';
 async function syncOnline(){
   if(!navigator.onLine)return;
@@ -10695,11 +10720,65 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
 })();
 </script>
 <script id="pj-sw-register">
-if('serviceWorker' in navigator){
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('./sw.js')
-      .then(function(reg){ console.log('SW terdaftar:', reg.scope); })
-      .catch(function(err){ console.log('SW gagal daftar:', err); });
+(function(){
+  function showUpdatedToast(){
+    // Pakai fungsi toast() bawaan aplikasi kalau ada; kalau tidak, bikin sendiri sekali pakai.
+    if(typeof window.toast==='function'){
+      window.toast('✓ Aplikasi telah diperbarui ke versi terbaru');
+      return;
+    }
+    const t=document.createElement('div');
+    t.textContent='✓ Aplikasi telah diperbarui ke versi terbaru';
+    t.style.cssText='position:fixed;left:16px;right:16px;bottom:20px;z-index:99999;background:#14284B;color:#fff;padding:12px 16px;border-radius:10px;font-size:13.5px;text-align:center;box-shadow:0 6px 16px rgba(0,0,0,.25)';
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(),2800);
+  }
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').then(function(reg){
+        console.log('SW terdaftar:', reg.scope);
+
+        // Kalau ada worker baru yang sudah siap nunggu, langsung aktifkan (auto-update).
+        if(reg.waiting) reg.waiting.postMessage('skipWaiting');
+
+        reg.addEventListener('updatefound', function(){
+          const newWorker=reg.installing;
+          if(!newWorker)return;
+          newWorker.addEventListener('statechange', function(){
+            if(newWorker.state==='installed' && navigator.serviceWorker.controller){
+              // Versi baru sudah siap → langsung aktifkan otomatis, tanpa perlu klik apa-apa.
+              newWorker.postMessage('skipWaiting');
+            }
+          });
+        });
+
+        // Cek pembaruan tiap kali app dibuka/kembali aktif.
+        document.addEventListener('visibilitychange', function(){
+          if(document.visibilityState==='visible') reg.update().catch(()=>{});
+        });
+      }).catch(function(err){ console.log('SW gagal daftar:', err); });
+
+      // Begitu worker baru resmi aktif, tandai lalu reload sekali biar
+      // halaman pakai kode/tampilan terbaru.
+      let reloaded=false;
+      navigator.serviceWorker.addEventListener('controllerchange', function(){
+        if(reloaded)return;
+        reloaded=true;
+        try{ sessionStorage.setItem('pjJustUpdated','1'); }catch(e){}
+        window.location.reload();
+      });
+    });
+  }
+
+  // Setelah reload akibat update, tampilkan notifikasi sekali saja.
+  document.addEventListener('DOMContentLoaded', function(){
+    try{
+      if(sessionStorage.getItem('pjJustUpdated')==='1'){
+        sessionStorage.removeItem('pjJustUpdated');
+        setTimeout(showUpdatedToast,600);
+      }
+    }catch(e){}
   });
-}
+})();
 </script>
