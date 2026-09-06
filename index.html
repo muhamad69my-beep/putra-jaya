@@ -1985,6 +1985,7 @@ const LASTSYNCKEY='putrajaya_last_online_sync';
 async function syncOnline(){
   if(!navigator.onLine)return;
   for(const p of db.products){if(!isUUID(p.id)){const old=p.id;p.id=newId();db.moves.forEach(m=>{if(String(m.productId)===String(old))m.productId=p.id;});}}
+  for(const m of db.moves){if(!isUUID(m.id))m.id=newId();}
   await apiUpsert('putrajaya_products',db.products.map(productToRemote));
   await apiUpsert('putrajaya_moves',db.moves.map(moveToRemote));
   await syncMiscOnline();
