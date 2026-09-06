@@ -1827,9 +1827,10 @@ async function apiGet(table,query='select=*'){
   const r=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?'+query,{headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY}});
   if(!r.ok)throw new Error(await r.text()); return r.json();
 }
-async function apiUpsert(table,rows){
+async function apiUpsert(table,rows,onConflict){
   if(!rows.length)return;
-  const r=await fetch(SUPABASE_URL+'/rest/v1/'+table,{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+  const url=SUPABASE_URL+'/rest/v1/'+table+(onConflict?('?on_conflict='+encodeURIComponent(onConflict)):'');
+  const r=await fetch(url,{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
   if(!r.ok)throw new Error(await r.text());
 }
 async function apiDelete(table,id){
@@ -1876,7 +1877,7 @@ async function syncMiscOnline(){
     if(remoteMap.settings!=null)db.settings=Object.assign({},remoteMap.settings||{},db.settings||{});
   }catch(e){console.warn('Gagal ambil data lain sebelum sinkron (tetap lanjut kirim versi lokal)',e);}
   const rows=PJ_MISC_KEYS.map(k=>({key:k,value:(k==='employeesUsers'?users:(db[k]===undefined?null:db[k])),updated_at:new Date().toISOString()}));
-  await apiUpsert('putrajaya_appdata',rows);
+  await apiUpsert('putrajaya_appdata',rows,'key');
   localStorage.setItem(KEY,JSON.stringify(db));
   if(typeof pjRefreshCurrentView==='function')pjRefreshCurrentView();
 }
@@ -1886,7 +1887,7 @@ async function syncMiscOnline(){
 // langsung muncul di HP lain dalam hitungan detik.
 async function syncEmployeesOnline(){
   if(!navigator.onLine)return;
-  try{ await apiUpsert('putrajaya_appdata',[{key:'employeesUsers',value:users,updated_at:new Date().toISOString()}]); }
+  try{ await apiUpsert('putrajaya_appdata',[{key:'employeesUsers',value:users,updated_at:new Date().toISOString()}],'key'); }
   catch(e){ console.warn('Gagal sinkron akun karyawan ke online',e); toast('Perubahan tersimpan di HP ini. Sinkron online gagal (cek koneksi).'); }
 }
 function applyRemoteEmployeesUsers(value){
@@ -2351,7 +2352,7 @@ function save(){
     for(const old of beforeM){if(!amoves.has(String(old.id)))logActivity('Hapus Transaksi',(old.no||old.id||'')+' '+(old.product||''));}
     __productSnapshot=JSON.stringify(afterP);__moveSnapshot=JSON.stringify(db.moves||[]);
   }catch(e){console.warn('Log aktivitas gagal',e)}
-  localStorage.setItem(KEY,JSON.stringify(db));syncOnline().catch(err=>{console.warn('Sync online gagal',err);toast('Data tersimpan di HP. Sinkron online gagal.');});
+  localStorage.setItem(KEY,JSON.stringify(db));syncOnline().catch(err=>{console.warn('Sync online gagal',err);toast('Sinkron online gagal: '+String(err&&err.message||err).slice(0,120));});
 }
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ymd(d){d=d||new Date();const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())}/* ymd(): format tanggal YYYY-MM-DD berdasarkan waktu LOKAL perangkat, bukan UTC. Dipakai supaya "hari ini" berganti jam 00:00 waktu setempat. */
@@ -4043,8 +4044,40 @@ if(!LOGIN_ENABLED){
   window.deleteTransaction=function(id){if(!hasPermission('Hapus Transaksi')){alert('Anda tidak memiliki izin menghapus transaksi.');return}const m=db.moves.find(x=>String(x.id)===String(id));if(!m)return;if(!confirm('⚠️ Yakin ingin menghapus transaksi ini?'))return;pjRemoteDelete('putrajaya_moves',m.id);db.moves=db.moves.filter(x=>String(x.id)!==String(id));logActivity('Hapus Transaksi',(m.no||m.id||'')+' '+(m.product||''));save();renderHistory();toast('✓ Transaksi dihapus')};
   window.clearHistory=function(){if(!requireAdmin())return;if(confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Log aktivitas tetap dipertahankan. Tindakan ini tidak bisa dibatalkan.')){const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;pjRemoteDeleteAll('putrajaya_moves');db.moves=[];safeLog('Hapus Riwayat Transaksi','Semua transaksi dihapus, saldo kas & stok tetap aman, log aktivitas dipertahankan');save();renderHistory();if(typeof window.cashHeld==='function')window.cashHeld();toast('✓ Riwayat transaksi dikosongkan, saldo kas & stok tidak berubah')}};
   // Safer backup/restore: include users, settings, counters, notes, photos and activity log.
-  window.renderBackup=function(){if(!requireAdmin())return;app.innerHTML=`<div class="card"><h2>Backup & Restore</h2><p class="muted">Backup mencakup seluruh data aplikasi: katalog, stok, transaksi, foto, akun, hak akses, Catatan Belanja, pengaturan, nomor transaksi, dan Riwayat Aktivitas.</p><div class="actions"><button onclick="backup()">Download Backup Lengkap</button><button class="success" onclick="document.getElementById('restoreFile').click()">↻ Pulihkan Data (Restore)</button><input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restore(event)"></div><div class="muted" style="margin-top:6px">Pilih file backup (.json) yang pernah diunduh untuk memulihkan data.</div><hr><button class="danger" onclick="resetAll()">Reset Semua Data</button></div><div class="card" style="margin-top:10px"><h2>Backup Online</h2><p class="muted">Data barang &amp; transaksi otomatis tersinkron ke server online setiap ada perubahan, dan disinkron ulang otomatis setiap 5 menit selama HP terhubung internet.</p><div class="card" id="onlineSyncStatus" style="background:#f7f9fc;border:1px solid #dce5f2">${navigator.onLine?'🟢 Online':'🔴 Offline'} · <span id="onlineSyncTime">${lastOnlineSyncText()}</span></div><div class="actions" style="margin-top:10px"><button class="success" onclick="manualSyncOnline()">Backup Online Sekarang</button></div></div>${renderStorageUsageCard()}`;setTimeout(()=>{if(window.refreshStorageUsage)refreshStorageUsage();},0);};
-  window.manualSyncOnline=async function(){toast('Menyinkronkan ke server online...');try{await syncOnline();const st=document.getElementById('onlineSyncTime');if(st)st.textContent=lastOnlineSyncText();toast('✓ Backup online berhasil')}catch(err){console.warn(err);toast('Gagal sinkron online. Cek koneksi internet.')}};
+  window.renderBackup=function(){if(!requireAdmin())return;app.innerHTML=`<div class="card"><h2>Backup & Restore</h2><p class="muted">Backup mencakup seluruh data aplikasi: katalog, stok, transaksi, foto, akun, hak akses, Catatan Belanja, pengaturan, nomor transaksi, dan Riwayat Aktivitas.</p><div class="actions"><button onclick="backup()">Download Backup Lengkap</button><button class="success" onclick="document.getElementById('restoreFile').click()">↻ Pulihkan Data (Restore)</button><input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restore(event)"></div><div class="muted" style="margin-top:6px">Pilih file backup (.json) yang pernah diunduh untuk memulihkan data.</div><hr><button class="danger" onclick="resetAll()">Reset Semua Data</button></div><div class="card" style="margin-top:10px"><h2>Backup Online</h2><p class="muted">Data barang &amp; transaksi otomatis tersinkron ke server online setiap ada perubahan, dan disinkron ulang otomatis setiap 5 menit selama HP terhubung internet.</p><div class="card" id="onlineSyncStatus" style="background:#f7f9fc;border:1px solid #dce5f2">${navigator.onLine?'🟢 Online':'🔴 Offline'} · <span id="onlineSyncTime">${lastOnlineSyncText()}</span></div><div class="actions" style="margin-top:10px"><button class="success" onclick="manualSyncOnline()">Backup Online Sekarang</button></div></div><div class="card" style="margin-top:10px"><h2>Diagnostik Sinkron</h2><p class="muted">Cek langsung ke server Supabase: berapa data yang benar-benar tersimpan online, dan apakah ada bagian yang belum tersinkron.</p><div class="actions"><button onclick="runSupabaseDiagnostic()">Jalankan Diagnostik</button></div><div id="pjDiagResult" style="margin-top:10px"></div></div>${renderStorageUsageCard()}`;setTimeout(()=>{if(window.refreshStorageUsage)refreshStorageUsage();},0);};
+  window.runSupabaseDiagnostic=async function(){
+    const el=document.getElementById('pjDiagResult');
+    if(!el)return;
+    el.innerHTML='<p class="muted">Memeriksa ke server...</p>';
+    if(!navigator.onLine){el.innerHTML='<p class="dangerText">HP sedang offline. Sambungkan internet dulu.</p>';return;}
+    try{
+      const [products,moves,appdata,users]=await Promise.all([
+        apiGet('putrajaya_products','select=id'),
+        apiGet('putrajaya_moves','select=id'),
+        apiGet('putrajaya_appdata','select=key,updated_at'),
+        apiGet('putrajaya_users','select=username').catch(()=>[])
+      ]);
+      const foundKeys=new Set(appdata.map(r=>r.key));
+      const missing=PJ_MISC_KEYS.filter(k=>!foundKeys.has(k));
+      const lastUpdate=appdata.length?appdata.map(r=>r.updated_at).sort().slice(-1)[0]:null;
+      let html='<table class="table pj-tight"><tbody>';
+      html+='<tr><td>Produk (putrajaya_products)</td><td><b>'+products.length+'</b> baris</td></tr>';
+      html+='<tr><td>Transaksi (putrajaya_moves)</td><td><b>'+moves.length+'</b> baris</td></tr>';
+      html+='<tr><td>Data lain (putrajaya_appdata)</td><td><b>'+appdata.length+'</b> / '+PJ_MISC_KEYS.length+' key</td></tr>';
+      html+='<tr><td>Akun (putrajaya_users)</td><td><b>'+users.length+'</b> baris (boleh 0, ini cadangan)</td></tr>';
+      html+='</tbody></table>';
+      if(missing.length){
+        html+='<p class="dangerText" style="margin-top:8px">⚠ Key belum tersinkron: '+missing.join(', ')+'</p><p class="muted">Coba buka/ubah fitur terkait (mis. tambah kategori atau catat pengeluaran), lalu jalankan diagnostik lagi.</p>';
+      }else{
+        html+='<p class="successText" style="margin-top:8px">✓ Semua data lengkap tersinkron.</p>';
+      }
+      html+='<p class="muted" style="margin-top:6px">Update terakhir di appdata: '+(lastUpdate?new Date(lastUpdate).toLocaleString('id-ID'):'-')+'</p>';
+      el.innerHTML=html;
+    }catch(err){
+      el.innerHTML='<p class="dangerText">Gagal cek ke server: '+String(err&&err.message||err).slice(0,200)+'</p>';
+    }
+  };
+  window.manualSyncOnline=async function(){toast('Menyinkronkan ke server online...');try{await syncOnline();const st=document.getElementById('onlineSyncTime');if(st)st.textContent=lastOnlineSyncText();toast('✓ Backup online berhasil')}catch(err){console.warn(err);toast('Gagal sinkron: '+String(err&&err.message||err).slice(0,120))}};
   window.backup=function(){if(!requireAdmin())return;const payload={format:'PUTRAJAYA2_BACKUP',version:2,createdAt:new Date().toISOString(),db:JSON.parse(JSON.stringify(db)),users:JSON.parse(JSON.stringify(users)),sessionInfo:{lastUser:session?.username||'admin'}};const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.href=url;a.download='PUTRAJAYA2_BACKUP_'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);safeLog('Backup','Backup lengkap dibuat');save();toast('✓ Backup lengkap berhasil dibuat')};
   window.restore=function(e){if(!requireAdmin())return;const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const raw=JSON.parse(r.result);const d=raw.db||raw;if(!Array.isArray(d.products)||!Array.isArray(d.moves))throw new Error('Format backup tidak valid');d.shoppingNotes=Array.isArray(d.shoppingNotes)?d.shoppingNotes:[];d.activityLog=Array.isArray(d.activityLog)?d.activityLog:[];d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};if(!confirm('Yakin ingin melakukan Restore? Data yang dipulihkan akan menggantikan data yang terkait dengan backup.'))return;const oldDb=JSON.parse(JSON.stringify(db)),oldUsers=JSON.parse(JSON.stringify(users));try{db=d;if(raw.users)users=raw.users;normalizeUsers();if(typeof refreshLocationNames==='function')refreshLocationNames();safeLog('Restore','Backup dipulihkan dari '+f.name);save();page('home');toast('✓ Data berhasil dipulihkan')}catch(err){db=oldDb;users=oldUsers;save();throw err}}catch(err){console.error(err);alert('File backup tidak valid atau proses restore gagal. Data yang sedang digunakan tetap dipertahankan.')}};r.readAsText(f);e.target.value=''};
   // Enhanced report with filters + CSV export.
