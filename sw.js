@@ -5,7 +5,7 @@
 // tidak ada internet, dan menampilkan layar "Tidak ada koneksi" milik app
 // sendiri, bukan halaman offline bawaan browser.
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = 'putrajaya2-shell-' + CACHE_VERSION;
 const SHELL_FILES = ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon.png'];
 const SHELL_URLS = SHELL_FILES.map(function (f) {
@@ -48,10 +48,12 @@ self.addEventListener('fetch', function (event) {
   const isShell = SHELL_URLS.indexOf(url.href.split('?')[0]) !== -1 || req.mode === 'navigate';
   if (!isShell) return;
 
-  // Strategi: network-first (selalu coba ambil versi terbaru dulu kalau online),
-  // fallback ke cache kalau offline.
+  // Strategi: network-first, dan PAKSA lewati cache HTTP browser (cache:'no-store')
+  // supaya selalu ambil versi terbaru dari server, bukan versi lama yang
+  // "diinget" browser. Fallback ke Cache Storage kalau offline.
+  const freshReq = new Request(req.url, { cache: 'no-store', mode: 'same-origin', credentials: 'same-origin' });
   event.respondWith(
-    fetch(req).then(function (res) {
+    fetch(freshReq).then(function (res) {
       const resClone = res.clone();
       caches.open(CACHE_NAME).then(function (cache) { cache.put(req, resClone); });
       return res;
