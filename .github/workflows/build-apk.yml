@@ -34,10 +34,12 @@ jobs:
           accept-android-sdk-licenses: true
           packages: platform-tools
 
-      - name: Install Expect
+      - name: Install Android build dependencies
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y expect
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmdline-tools;latest"
+          sdkmanager --list_installed | sed -n '1,160p'
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
@@ -51,9 +53,12 @@ jobs:
           cat "$HOME/.bubblewrap/config.json"
           test -x "$JAVA_HOME/bin/java"
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
 
       - name: Check Bubblewrap configuration
-        run: bubblewrap doctor
+        run: |
+          bubblewrap doctor
 
       - name: Generate temporary signing passwords
         run: |
@@ -95,7 +100,7 @@ jobs:
             -re {Organization} { send "PUTRAJAYA\r"; exp_continue }
             -re {Country code} { send "ID\r"; exp_continue }
             -re {Keystore password} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Key password} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {Key password} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
             -re {ERROR|Error:} { exit 1 }
             timeout { exit 1 }
             eof
