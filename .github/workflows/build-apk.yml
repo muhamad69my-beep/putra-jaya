@@ -128,7 +128,7 @@ jobs:
             -re {Organization:} { send "PUTRAJAYA\r"; exp_continue }
             -re {Country code:} { send "ID\r"; exp_continue }
             -re {Keystore password:} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
+            -re {Key password:} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
             -re {ERROR|Error:} { puts "Bubblewrap init reported an error."; exit 1 }
             timeout { puts "Bubblewrap init timed out."; exit 1 }
             eof {
