@@ -93,15 +93,14 @@ jobs:
         shell: bash
         run: |
           rm -rf app-build
+          mkdir -p app-build
           expect <<'EXPECT_SCRIPT'
-          set timeout 180
+          set timeout 300
           log_user 1
           spawn bubblewrap init --manifest=https://muhamad69my-beep.github.io/putra-jaya/manifest.json --directory=app-build
           expect {
             -re {Do you want Bubblewrap to install the JDK.*\(Y/n\)} { send "n\r"; exp_continue }
             -re {Do you want Bubblewrap to install Android SDK.*\(Y/n\)} { send "n\r"; exp_continue }
-            -re {Directory .* does not exist\.[[:space:]]+Do you want to create it now\?.*\(Y/n\)} { send "y\r"; exp_continue }
-            -re {Directory .* does not exist\.[[:space:]]+Do you want to create it now\?} { send "y\r"; exp_continue }
             -re {Domain:} { send "\r"; exp_continue }
             -re {URL path:} { send "\r"; exp_continue }
             -re {Application name:} { send "\r"; exp_continue }
