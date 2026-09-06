@@ -57,8 +57,7 @@ jobs:
           test -d "$ANDROID_HOME/build-tools/35.0.0"
 
       - name: Check Bubblewrap configuration
-        run: |
-          bubblewrap doctor
+        run: bubblewrap doctor
 
       - name: Generate temporary signing passwords
         run: |
@@ -100,7 +99,7 @@ jobs:
             -re {Organization} { send "PUTRAJAYA\r"; exp_continue }
             -re {Country code} { send "ID\r"; exp_continue }
             -re {Keystore password} { send "$env(BUBBLEWRAP_KEYSTORE_PASSWORD)\r"; exp_continue }
-            -re {Key password} { send "$env(BUBBLEWRAP_KEY_PASSWORD\r"; exp_continue }
+            -re {Key password} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
             -re {ERROR|Error:} { exit 1 }
             timeout { exit 1 }
             eof
