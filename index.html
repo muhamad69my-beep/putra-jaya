@@ -1421,7 +1421,7 @@ html body #app .pj-omset-payment .value{
 <button id="n-akunSaya" onclick="page('akunSaya');closeMenu()">Akun Saya</button>
 <button id="n-logout" onclick="closeMenu();logout()">KELUAR / LOGOUT</button>
 </div>
-<div class="login-overlay" id="loginOverlay"><form class="login-box" onsubmit="return doLogin(event)"><h2>PUTRAJAYA 2</h2><div class="brand">Login Sistem Penjualan &amp; Stok</div><label>Username</label><input autocomplete="username" id="loginUser" required=""/><label>Password</label><div class="pj-pass-wrap"><input autocomplete="current-password" id="loginPass" required="" type="password"/><button type="button" class="pj-pass-eye" id="loginPassEye" onclick="pjToggleLoginPass()" aria-label="Tampilkan kata sandi">👁️</button></div><button class="gray" onclick="openForgotAdmin()" style="margin-top:10px" type="button">Lupa Password Admin?</button><div class="login-error" id="loginError"></div><button type="submit">MASUK</button></form></div>
+<div class="login-overlay" id="loginOverlay"><form class="login-box" onsubmit="return doLogin(event)"><h2>PUTRAJAYA 2</h2><div class="brand">Login Sistem Penjualan &amp; Stok</div><label>Username</label><input autocomplete="username" id="loginUser" required=""/><label>Password</label><div class="pj-pass-wrap"><input autocomplete="current-password" id="loginPass" required="" type="password"/><button type="button" class="pj-pass-eye" id="loginPassEye" onclick="pjToggleLoginPass()" aria-label="Tampilkan kata sandi">👁️</button></div><button class="gray" onclick="openForgotAdmin()" style="margin-top:10px" type="button">Lupa Password Admin?</button><button class="gray" onclick="pjManualRestore(this)" style="margin-top:8px" type="button">🔄 Pulihkan Data dari Cloud</button><div class="login-error" id="loginError"></div><button type="submit">MASUK</button></form></div>
 <div class="update-overlay" id="updateOverlay"><div class="update-box"><div class="icon">⬆️</div><h2>Update Tersedia</h2><p>Versi terbaru aplikasi PUTRAJAYA 2 sudah siap. Update sekarang untuk mendapatkan perbaikan &amp; fitur terbaru.</p><div class="actions"><button class="gray" onclick="postponeAppUpdate()" type="button">Nanti</button><button class="success" onclick="applyAppUpdate()" type="button">Update Sekarang</button></div></div></div>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div><div class="toast" id="toast"></div>
 <style id="pj-nilai-penjualan-style">
@@ -1836,6 +1836,31 @@ async function restoreFromCloud(){
   }catch(e){console.warn('Gagal memulihkan data dari cloud',e);return false;}
 }
 window.pjRestoreFromCloud=restoreFromCloud;
+window.pjManualRestore=async function(btn){
+  if(btn){btn.disabled=true;btn.textContent='Menarik data...';}
+  if(!navigator.onLine){
+    alert('HP tidak terhubung internet. Sambungkan ke WiFi/data dulu, lalu coba lagi.');
+    if(btn){btn.disabled=false;btn.textContent='🔄 Pulihkan Data dari Cloud';}
+    return;
+  }
+  try{
+    const [remoteProducts,remoteMoves]=await Promise.all([apiGet('putrajaya_products'),apiGet('putrajaya_moves')]);
+    if(!remoteProducts.length && !remoteMoves.length){
+      alert('Tidak ada data ditemukan di cloud (tabel kosong).');
+      if(btn){btn.disabled=false;btn.textContent='🔄 Pulihkan Data dari Cloud';}
+      return;
+    }
+    db.products=remoteProducts.map(productFromRemote);
+    db.moves=remoteMoves.map(moveFromRemote);
+    localStorage.setItem(KEY,JSON.stringify(db));
+    localStorage.setItem(LASTSYNCKEY,new Date().toISOString());
+    alert('✓ Berhasil! '+remoteProducts.length+' produk dan '+remoteMoves.length+' transaksi dipulihkan. Aplikasi akan dimuat ulang.');
+    location.reload();
+  }catch(e){
+    alert('Gagal memulihkan data: '+(e.message||e));
+    if(btn){btn.disabled=false;btn.textContent='🔄 Pulihkan Data dari Cloud';}
+  }
+};
 document.addEventListener('DOMContentLoaded',async function(){
   try{
     const kosong=(!db.products||db.products.length===0)&&(!db.moves||db.moves.length===0);
