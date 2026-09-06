@@ -66,19 +66,24 @@ jobs:
           expect {
             -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
             -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
+            -re {Domain:} { send "muhamad69my-beep.github.io\r"; exp_continue }
+            -re {URL path:} { send "/putra-jaya/\r"; exp_continue }
+            -re {Application name:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Short name:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Package ID:} { send "com.putrajaya.app\r"; exp_continue }
+            -re {Version:} { send "1.0.0\r"; exp_continue }
+            -re {Version code:} { send "1\r"; exp_continue }
+            -re {Full name:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Organization:} { send "PUTRAJAYA\r"; exp_continue }
+            -re {Country code:} { send "ID\r"; exp_continue }
+            -re {Password} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {Confirm} { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
             -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "y\r"; exp_continue }
-            -re "Application name" { send "\r"; exp_continue }
-            -re "Short name" { send "\r"; exp_continue }
-            -re "Package ID" { send "\r"; exp_continue }
-            -re "Full name" { send "PUTRAJAYA\r"; exp_continue }
-            -re "Organization" { send "PUTRAJAYA\r"; exp_continue }
-            -re "Country code" { send "ID\r"; exp_continue }
-            -re "Password" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
-            -re "Confirm" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {\(y/N\)} { send "\r"; exp_continue }
             eof
           }'
           test -d app-build
+          test -f app-build/twa-manifest.json
           find app-build -maxdepth 2 -type f -print
 
       - name: Build APK
@@ -91,10 +96,10 @@ jobs:
           expect {
             -re "Do you want Bubblewrap to install the JDK" { send "n\r"; exp_continue }
             -re "Do you want Bubblewrap to install the Android SDK" { send "n\r"; exp_continue }
-            -re {\(Y/n\)} { send "\r"; exp_continue }
-            -re {\(y/N\)} { send "y\r"; exp_continue }
             -re "Password" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
             -re "Confirm" { send "$env(BUBBLEWRAP_KEY_PASSWORD)\r"; exp_continue }
+            -re {\(Y/n\)} { send "\r"; exp_continue }
+            -re {\(y/N\)} { send "\r"; exp_continue }
             eof
           }'
 
