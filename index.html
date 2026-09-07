@@ -4828,7 +4828,11 @@ if(!LOGIN_ENABLED){
   }
   function setoranTotal(){
     ensureSetoranBos();
-    return db.setoranBos.reduce((sum,x)=>sum+(Number(x.jumlah)||0),0);
+    /* pj-fix-setoranarsip-v1: dulu Hapus Riwayat Dana menyimpan totalnya ke
+       db.setoranArsipTotal tapi tidak pernah dibaca balik di sini, jadi
+       Kas Toko/Uang di Toko naik palsu setelah riwayat dana dihapus.
+       Sekarang arsipnya ikut dihitung, sama seperti pengeluaranArsipTotal. */
+    return db.setoranBos.reduce((sum,x)=>sum+(Number(x.jumlah)||0),0)+(Number(db.setoranArsipTotal)||0);
   }
   // pj-satu-sumber-cashheld: dulu ada rumus "Uang di Toko" duplikat di sini.
   // Sekarang pakai window.cashHeld() yang sama dengan Beranda, PENGELUARAN,
@@ -4967,7 +4971,10 @@ if(!LOGIN_ENABLED){
     return (db.moves||[]).filter(x=>x && x.type==='Penjualan Toko'&&!x.cancelled && isTunaiSale(x))
       .reduce((sum,x)=>sum+(Number(x.paymentAmount ?? x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0);
   }
-  function setoranTotal(){ return (db.setoranBos||[]).reduce((sum,x)=>sum+(Number(x.jumlah)||0),0); }
+  /* pj-fix-setoranarsip-v1: lihat penjelasan di definisi setoranTotal() lain
+     (bagian SETORAN KE BOS) — arsip dana yang riwayatnya sudah dihapus kini
+     ikut dihitung supaya Kas Toko tidak naik palsu. */
+  function setoranTotal(){ return (db.setoranBos||[]).reduce((sum,x)=>sum+(Number(x.jumlah)||0),0)+(Number(db.setoranArsipTotal)||0); }
   function pengeluaranTotal(){
     ensurePengeluaran();
     return db.pengeluaran.reduce((sum,x)=>sum+(Number(x.jumlah)||0),0)+(Number(db.pengeluaranArsipTotal)||0);
