@@ -5,7 +5,6 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <title>PUTRAJAYA 2</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="./manifest.json" rel="manifest"/>
 <link href="./icon-192.png" rel="icon" sizes="192x192" type="image/png"/>
 <link href="./icon-512.png" rel="icon" sizes="512x512" type="image/png"/>
@@ -20,8 +19,8 @@ html.pj-startup-pending body #app,
 html.pj-startup-pending body #mainNav,
 html.pj-startup-pending body #bottomNav,
 html.pj-startup-pending body .putra-footer{visibility:hidden!important}
-html.pj-startup-pending body{background:#102a56}
-#pjStartupLoader{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#102a56,#14284b);gap:16px}
+html.pj-startup-pending body{background:#1976F3}
+#pjStartupLoader{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1976F3;gap:16px}
 html.pj-startup-ready #pjStartupLoader{display:none}
 #pjStartupLoader .pj-load-title{color:#ffffff;font-family:Arial,sans-serif;font-weight:800;font-size:19px;letter-spacing:.02em}
 #pjStartupLoader .pj-load-sub{color:#ffffff99;font-family:Arial,sans-serif;font-size:13px}
@@ -1774,6 +1773,9 @@ function productStockLineBold(p){return LOCATION_NAMES.map(l=>locLabel(l)+': <b>
 function productStockLinePlain(p){return LOCATION_NAMES.map(l=>locLabel(l)+' '+stockAt(p,l)).join(' · ');}
 
 
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
 const SUPABASE_URL='https://wdvgueloiqulgexmecps.supabase.co';
 const SUPABASE_KEY='sb_publishable_ARQ6eE3ZGxAS6rdvRmBPGA_OI_e0cC7';
 // --- REALTIME: begitu ada perubahan data di HP mana pun, HP lain langsung
@@ -1835,6 +1837,28 @@ function pjRemoteDeleteAll(table){
   if(!navigator.onLine)return;
   apiDeleteAll(table).catch(e=>console.warn('Gagal hapus massal online di '+table,e));
 }
+async function apiDeleteMany(table,ids){
+  const validIds=(ids||[]).filter(id=>id&&isUUID(String(id)));
+  if(!validIds.length)return;
+  const r=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=in.('+validIds.map(encodeURIComponent).join(',')+')',{method:'DELETE',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,Prefer:'return=minimal'}});
+  if(!r.ok)throw new Error(await r.text());
+}
+// pj-fix-hapus-2arah: hapus banyak baris transaksi sekaligus di server (dipakai saat
+// "Hapus Semua Riwayat Penjualan/Restoran" supaya baris lama beneran hilang, bukan cuma di HP ini).
+function pjRemoteDeleteMany(table,ids){
+  if(!navigator.onLine||!ids||!ids.length)return Promise.resolve();
+  return apiDeleteMany(table,ids).catch(e=>console.warn('Gagal hapus banyak baris online di '+table,e));
+}
+// pj-fix-hapus-2arah: timpa 1 jenis data (key) langsung ke server APA ADANYA, tanpa
+// proses gabung dgn data lama server dulu. Dipakai tepat setelah "Hapus" mengosongkan
+// data lokal, supaya penghapusan tidak dibatalkan oleh proses gabung otomatis di syncMiscOnline().
+async function pjForceSyncKey(key){
+  if(!navigator.onLine)return;
+  try{
+    const value=(key==='employeesUsers'?users:(db[key]===undefined?null:db[key]));
+    await apiUpsert('putrajaya_appdata',[{key:key,value:value,updated_at:new Date().toISOString()}],'key');
+  }catch(e){console.warn('Gagal memaksa sinkron '+key,e);}
+}
 function productToRemote(p){return {id:p.id,nama:p.nama,kode:p.kode,kategori:p.kategori||null,modal:+p.modal||0,min_stock:+p.min||0,stok_toko:+p.stokT||0,stok_g1:+p.stokG1||0,stok_g2:+p.stokG2||0,stok_g3:+p.stokG3||0,stok_g4:+p.stokG4||0,foto:p.foto||null};}
 function moveToRemote(x){return {id:x.id,no:x.no||null,type:x.type,product_id:isUUID(x.productId)?x.productId:null,product:x.product,qty:+x.qty||0,date:x.date,note:x.note||null,loc:x.loc||null,unit_price:+x.unitPrice||0,discount:+x.discount||0,total:+x.total||0,laba:+x.laba||0,modal_total:+x.modalTotal||0,username:x.user||null,payment:x.payment||null,payment_amount:+x.paymentAmount||0,cancelled:!!x.cancelled,cancelled_at:x.cancelledAt||null,cancelled_by:x.cancelledBy||null,correction_of:x.correctionOf||null};}
 // --- PEMULIHAN DATA DARI CLOUD (tarik balik dari Supabase ke HP) ---
@@ -1843,7 +1867,7 @@ function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.
 // --- SINKRON DATA LAINNYA (Riwayat Aktivitas, Kategori, Hutang, Pengeluaran,
 // Catatan Belanja, Setoran, Pengaturan, dll) — disimpan sebagai satu baris JSON
 // per jenis data di tabel putrajaya_appdata, supaya semua fitur ikut 2 arah. ---
-const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings','employeesUsers'];
+const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings','employeesUsers','cashOuts'];
 async function syncMiscOnline(){
   if(!navigator.onLine)return;
   // PATCH: sebelum kirim data lain (Riwayat Aktivitas, Notifikasi, Pengeluaran,
@@ -2006,7 +2030,7 @@ function pjMergeStrings(localArr,remoteArr){
   [...(Array.isArray(localArr)?localArr:[]),...(Array.isArray(remoteArr)?remoteArr:[])].forEach(s=>{const k=String(s||'').trim();if(k)seen.set(k.toLowerCase(),k)});
   return Array.from(seen.values());
 }
-const PJ_ID_KEYED_MISC=['activityLog','customerDebts','supplierDebts','deletedDebtHistory','notifications','pengeluaran','setoranBos','shoppingNotes'];
+const PJ_ID_KEYED_MISC=['activityLog','customerDebts','supplierDebts','deletedDebtHistory','notifications','pengeluaran','setoranBos','shoppingNotes','cashOuts'];
 async function pjMergePullAll(){
   if(!navigator.onLine)return;
   try{
@@ -2173,16 +2197,18 @@ function openNotifPanel(){
   modalEl.classList.add('show');
   renderNotifList();
 }
-function deleteNotification(id){
+async function deleteNotification(id){
   db.notifications=(db.notifications||[]).filter(x=>x.id!==id);
+  await pjForceSyncKey('notifications');
   save();
   renderNotifList();
   updateNotifBadge();
 }
-function deleteAllNotifications(){
+async function deleteAllNotifications(){
   if(!(db.notifications||[]).length)return;
   if(!confirm('Hapus semua pesan masuk?'))return;
   db.notifications=[];
+  await pjForceSyncKey('notifications');
   save();
   renderNotifList();
   updateNotifBadge();
@@ -2347,7 +2373,13 @@ function save(){
     for(const old of beforeM){if(!amoves.has(String(old.id)))logActivity('Hapus Transaksi',(old.no||old.id||'')+' '+(old.product||''));}
     __productSnapshot=JSON.stringify(afterP);__moveSnapshot=JSON.stringify(db.moves||[]);
   }catch(e){console.warn('Log aktivitas gagal',e)}
-  localStorage.setItem(KEY,JSON.stringify(db));syncOnline().catch(err=>{console.warn('Sync online gagal',err);toast('Sinkron online gagal: '+String(err&&err.message||err).slice(0,120));});
+  localStorage.setItem(KEY,JSON.stringify(db));
+  return syncOnline().then(()=>true).catch(err=>{console.warn('Sync online gagal',err);toast('Sinkron online gagal: '+String(err&&err.message||err).slice(0,120));return false;});
+  /* pj-save-online-confirm-v1: save() sekarang mengembalikan (return) hasil
+     sinkron online (true/false) supaya pemanggil yang butuh kepastian —
+     misal simpan transaksi penjualan — bisa menampilkan konfirmasi
+     "tersimpan & online". Pemanggil lama yang tidak memakai nilai
+     kembaliannya tetap berjalan persis seperti sebelumnya. */
 }
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ymd(d){d=d||new Date();const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())}/* ymd(): format tanggal YYYY-MM-DD berdasarkan waktu LOKAL perangkat, bukan UTC. Dipakai supaya "hari ini" berganti jam 00:00 waktu setempat. */
@@ -2872,10 +2904,18 @@ function refreshProfessionalHome(){
  const recent=[...sales].sort((a,b)=>((b.date||'')+' '+(b.time||'')).localeCompare((a.date||'')+' '+(a.time||''))).slice(0,5);const recentEl=document.getElementById('homeRecentTx'); if(recentEl) recentEl.innerHTML=recent.length?recent.map(x=>`<div class="pj-pro-row"><div class="pj-pro-row-main"><b>${esc(x.product||'Penjualan')}</b><span>${esc(x.date||'-')}${x.time?' · '+esc(x.time):''} · ${x.qty||0} pcs · ${esc(paymentLabel(x.payment))}</span></div><div class="pj-pro-row-val">${rupiah(x.total||0)}</div></div>`).join(''):'<div class="pj-pro-empty">Belum ada transaksi penjualan.</div>';
  const inv=totals();setHomeAmount('homeModalToko',inv.loc.Toko,canSeeModal('Toko'));setHomeAmount('homeModalGudang',gudangModalOf(inv),canSeeModal('GUDANG'));setHomeAmount('homeModalTotal',inv.modal,canSeeModal('Toko')||canSeeModal('GUDANG'));setHomeAmount('homeModalTotal2',inv.modal,canSeeModal('Toko')||canSeeModal('GUDANG'));
  renderProfessionalHomeChart(sales,start,end);
- const kasCashSales=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0);
- const kasSetoran=(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
- const kasPengeluaran=(db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
- setHomeAmount('homeKasToko',Math.max(0,kasCashSales-kasSetoran-kasPengeluaran),true);
+ /* pj-hometkastoko-fix-v1: sebelumnya angka KAS TOKO di Beranda dihitung
+    ulang secara terpisah di sini dan LUPA memasukkan "arsip" penjualan
+    tunai & pengeluaran lama (dari riwayat yang pernah dihapus), jadi
+    angkanya bisa beda/lebih kecil dari KAS TOKO yang benar di halaman
+    Ambil Dana / Pengeluaran. Sekarang dipakai cashHeld() yang sama —
+    satu sumber angka untuk semua halaman, tidak ada lagi selisih. */
+ const kasTokoValue=(typeof window.cashHeld==='function')?window.cashHeld():Math.max(0,
+   (db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0)
+   -(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)
+   -((db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)+(Number(db.pengeluaranArsipTotal)||0))
+ );
+ setHomeAmount('homeKasToko',kasTokoValue,true);
  applyResponsiveHomeMoney();
 }
 function moveProduct(x){return db.products.find(p=>p.id===x.productId)||db.products.find(p=>p.nama===x.product)||null}
@@ -3104,7 +3144,7 @@ function receiveShopping(id){
  if(!p)return alert('Produk dari catatan belanja tidak ditemukan di katalog.');
  movement('in',p.id,n.qty||1);
 }
-function deleteShoppingNote(id){if(!confirm('Hapus catatan belanja ini?'))return;db.shoppingNotes=db.shoppingNotes.filter(x=>x.id!==id);save();renderShoppingNotes();}
+async function deleteShoppingNote(id){if(!confirm('Hapus catatan belanja ini?'))return;db.shoppingNotes=db.shoppingNotes.filter(x=>x.id!==id);await pjForceSyncKey('shoppingNotes');save();renderShoppingNotes();}
 function addShoppingToCatalog(id){const n=db.shoppingNotes.find(x=>x.id===id);if(!n)return;closeM();openProduct();setTimeout(()=>{const el=document.getElementById('nama');if(el)el.value=n.nama;toast('Nama barang sudah diisi dari Catatan Belanja')},50)}
 let selectedCategory='ALL';
 let selectedStockFilter='ALL';
@@ -3283,7 +3323,7 @@ function openCategoryManager(){if(!canAdmin())return alert('Hanya Admin yang dap
 function bindCategoryManagerActions(cats){const box=document.getElementById('categoryManagerList');if(!box)return;box.querySelectorAll('[data-action=\"edit-category\"]').forEach(b=>b.addEventListener('click',()=>editCategory(cats[+b.dataset.categoryIndex])));box.querySelectorAll('[data-action=\"delete-category\"]').forEach(b=>b.addEventListener('click',()=>deleteCategory(cats[+b.dataset.categoryIndex])))}
 function addCategory(){if(!canAdmin())return;const el=document.getElementById('newCategoryName'),name=(el?.value||'').trim();if(!name)return alert('Nama kategori wajib diisi.');if(getCategories().some(c=>c.toLowerCase()===name.toLowerCase()))return alert('Kategori sudah ada.');db.categories.push(name);saveCategories();logActivity('Tambah Kategori',name);openCategoryManager();toast('✓ Kategori ditambahkan')}
 function editCategory(oldName){if(!canAdmin())return;const name=prompt('Nama kategori baru:',oldName);if(name===null)return;const n=name.trim();if(!n)return alert('Nama kategori wajib diisi.');if(n.toLowerCase()!==oldName.toLowerCase()&&getCategories().some(c=>c.toLowerCase()===n.toLowerCase()))return alert('Kategori sudah ada.');db.products.forEach(p=>{if(String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===oldName.toLowerCase())p.kategori=n});db.categories=getCategories().filter(c=>c.toLowerCase()!==oldName.toLowerCase());db.categories.push(n);save();logActivity('Edit Kategori',oldName+' → '+n);openCategoryManager();toast('✓ Kategori diperbarui')}
-function deleteCategory(name){if(!canAdmin())return;const count=db.products.filter(p=>String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase()).length;if(!confirm('Hapus kategori '+name+'?'+(count?' Barang yang memakai kategori ini tetap dipertahankan, tetapi kategorinya akan dikosongkan.':'')))return;db.products.forEach(p=>{if(String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase())p.kategori=''});db.categories=getCategories().filter(c=>c.toLowerCase()!==name.toLowerCase());save();logActivity('Hapus Kategori',name);openCategoryManager();toast('✓ Kategori dihapus')}
+async function deleteCategory(name){if(!canAdmin())return;const count=db.products.filter(p=>String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase()).length;if(!confirm('Hapus kategori '+name+'?'+(count?' Barang yang memakai kategori ini tetap dipertahankan, tetapi kategorinya akan dikosongkan.':'')))return;db.products.forEach(p=>{if(String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase())p.kategori=''});db.categories=getCategories().filter(c=>c.toLowerCase()!==name.toLowerCase());await pjForceSyncKey('categories');save();logActivity('Hapus Kategori',name);openCategoryManager();toast('✓ Kategori dihapus')}
 function categorySelectFocus(el){if(el)el.dataset.previous=el.value||''}
 function categorySelectChanged(el){if(!el)return;if(el.value==='__add_category__'){const previous=el.dataset.previous||'';openQuickCategory();setTimeout(()=>{if(document.getElementById('kategori'))document.getElementById('kategori').value=previous;},0);return}el.dataset.previous=el.value||''}
 function openQuickCategory(){
@@ -3648,10 +3688,14 @@ function openOutForm(outType){
     // Tidak dicatat ke Riwayat Aktivitas — Penjualan & Restoran punya halaman riwayat sendiri.
 
     if(outType==='toko')pushSaleNotification([newMove]);
-    save();
-    toast(outType==='restoran'?'✓ Pengeluaran restoran disimpan':'✓ Penjualan toko disimpan');
+    const pjTxLabel=outType==='restoran'?'Pengeluaran restoran':'Penjualan toko';
+    toast('✓ '+pjTxLabel+' disimpan');
     closeM();
     setTimeout(()=>page('home'),120);
+    /* pj-save-online-confirm-v1: konfirmasi tambahan begitu transaksi ini
+       benar-benar sampai ke server online (khusus transaksi, bukan
+       perubahan data lain seperti edit barang). */
+    save().then(ok=>{ if(ok) toast('✓ '+pjTxLabel+' tersimpan & online'); });
   }
 }
 
@@ -3700,7 +3744,7 @@ function openActivityDeleteMenu(){
   sheet.innerHTML=`<h2>Hapus Riwayat Aktivitas</h2><p class="muted">Penghapusan hanya memengaruhi activityLog. Data barang, stok, penjualan, dan transaksi tetap aman.</p><div class="card" style="background:#f7f9fc;border:1px solid #dce5f2"><b>Jumlah tersimpan: ${(db.activityLog||[]).length} / 2.000</b></div><div class="actions" style="margin-top:12px;display:grid"><button class="danger" onclick="deleteActivityByAge(0)">Hapus Semua Riwayat</button><button class="danger" onclick="deleteActivityByAge(30)">Hapus Riwayat Lebih dari 30 Hari</button><button class="danger" onclick="deleteActivityByAge(90)">Hapus Riwayat Lebih dari 90 Hari</button><button class="gray" onclick="closeM()">Batal</button></div>`;
   modal.classList.add('show');
 }
-function deleteActivityByAge(days){
+async function deleteActivityByAge(days){
   if(!requireAdmin())return;
   const logs=db.activityLog||[];
   if(!logs.length){closeM();alert('Riwayat aktivitas masih kosong.');return}
@@ -3713,6 +3757,7 @@ function deleteActivityByAge(days){
   else {const cutoff=Date.now()-days*86400000;db.activityLog=logs.filter(x=>{const t=Date.parse(x.dateTime);return !Number.isFinite(t)||t>=cutoff})}
   const removed=before-db.activityLog.length;
   localStorage.setItem(KEY,JSON.stringify(db));
+  await pjForceSyncKey('activityLog');
   closeM();
   toast(`✓ ${removed} riwayat dihapus`);
   renderActivityHistory();
@@ -4303,7 +4348,7 @@ if(!LOGIN_ENABLED){
   window.renderCashOut=function(){if(!hasPermission('Lihat Uang Keluar'))return alert('Anda tidak memiliki izin melihat Uang Keluar.');const q=(document.getElementById('cashQ')?.value||'').toLowerCase();const list=db.cashOuts.filter(x=>(x.kategori+' '+x.keterangan+' '+x.catatan).toLowerCase().includes(q));const total=list.reduce((a,x)=>a+(+x.jumlah||0),0);app.innerHTML='<div class="card"><h2>Uang Keluar</h2><div class="muted">Pengeluaran toko selain transaksi barang keluar.</div><div class="toolbar"><input id="cashQ" placeholder="Cari kategori/keterangan..." value="'+safe(q)+'" oninput="renderCashOut()"><button onclick="openCashOut()">+ Tambah</button></div><div class="card"><b>Total ditampilkan: '+rupiah(total)+'</b></div><div class="tablewrap"><table class="table"><thead><tr><th>Tanggal</th><th>Kategori</th><th>Keterangan</th><th>Jumlah</th><th>Aksi</th></tr></thead><tbody>'+(list.length?list.map(x=>'<tr><td>'+fmtDate(x.tanggal)+'</td><td>'+safe(x.kategori)+'</td><td>'+safe(x.keterangan)+'</td><td>'+rupiah(x.jumlah)+'</td><td><button class="smallbtn" onclick="openCashOut(\''+x.id+'\')">Edit</button> <button class="smallbtn danger" onclick="deleteCashOut(\''+x.id+'\')">Hapus</button></td></tr>').join(''):'<tr><td colspan="5" class="empty">Belum ada Uang Keluar.</td></tr>')+'</tbody></table></div></div>'}
   window.openCashOut=function(id=''){if(!hasPermission('Tambah/Edit Uang Keluar'))return alert('Anda tidak memiliki izin menambah/edit Uang Keluar.');const x=db.cashOuts.find(a=>a.id===id);sheet.innerHTML='<h2>'+(x?'Edit':'Tambah')+' Uang Keluar</h2><label>Tanggal</label><input id="coDate" type="date" value="'+safe(x?.tanggal||today())+'"><label>Kategori</label><input id="coCat" value="'+safe(x?.kategori||'')+'" placeholder="Listrik, Transportasi, Gaji..."><label>Keterangan</label><input id="coKet" value="'+safe(x?.keterangan||'')+'"><label>Jumlah</label>'+moneyField('coAmt',x?.jumlah||'',false)+'<label>Catatan</label><textarea id="coNote" rows="2">'+safe(x?.catatan||'')+'</textarea><div class="actions"><button class="gray" type="button" onclick="closeM()">Batal</button><button class="success" type="button" onclick="saveCashOut(\''+safe(id)+'\')">Simpan</button></div>';modal.classList.add('show')}
   window.saveCashOut=function(id){const tanggal=coDate.value,kategori=coCat.value.trim(),keterangan=coKet.value.trim(),jumlah=moneyValue(coAmt.value);if(!tanggal||!kategori||jumlah<=0)return alert('Tanggal, kategori, dan jumlah wajib diisi.');const old=db.cashOuts.find(x=>x.id===id);const d={id:id||newId(),tanggal,kategori,keterangan,jumlah,catatan:coNote.value.trim()};if(old)Object.assign(old,d);else db.cashOuts.unshift(d);persist(old?'Edit Uang Keluar':'Tambah Uang Keluar',kategori+' '+rupiah(jumlah));closeM();renderCashOut();toast('✓ Uang Keluar tersimpan')}
-  window.deleteCashOut=function(id){if(!hasPermission('Hapus Uang Keluar'))return alert('Anda tidak memiliki izin menghapus Uang Keluar.');const x=db.cashOuts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus Uang Keluar ini?'))return;db.cashOuts=db.cashOuts.filter(a=>a.id!==id);persist('Hapus Uang Keluar',x.kategori+' '+rupiah(x.jumlah));renderCashOut();toast('✓ Uang Keluar dihapus')}
+  window.deleteCashOut=async function(id){if(!hasPermission('Hapus Uang Keluar'))return alert('Anda tidak memiliki izin menghapus Uang Keluar.');const x=db.cashOuts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus Uang Keluar ini?'))return;db.cashOuts=db.cashOuts.filter(a=>a.id!==id);await pjForceSyncKey('cashOuts');persist('Hapus Uang Keluar',x.kategori+' '+rupiah(x.jumlah));renderCashOut();toast('✓ Uang Keluar dihapus')}
 
   // ---------- Tutup Hari ----------
   window.renderClosing=function(){if(!hasPermission('Tutup Hari'))return alert('Anda tidak memiliki izin Tutup Hari.');const canLabaBersih=canAdmin()||hasPermission('Lihat Laba Bersih');const d=today();const already=db.dayClosings.find(x=>x.tanggal===d);const list=db.dayClosings.slice().sort((a,b)=>b.tanggal.localeCompare(a.tanggal));app.innerHTML='<div class="card"><h2>Tutup Kasir / Tutup Hari</h2><p class="muted">Mencatat ringkasan operasional tanpa menghapus transaksi.</p><div class="card"><b>Hari ini: '+fmtDate(d)+'</b><div class="actions" style="margin-top:10px"><button class="success" onclick="closeToday()" '+(already?'disabled':'')+'>'+(already?'✓ Hari Sudah Ditutup':'Tutup Hari Ini')+'</button></div></div><h3>Riwayat Tutup Hari</h3><div class="tablewrap"><table class="table"><thead><tr><th>Tanggal</th><th>Penjualan</th><th>Modal</th><th>Laba Kotor</th><th>Uang Keluar</th><th>Laba Bersih</th><th>Transaksi</th><th>Ditutup</th></tr></thead><tbody>'+(list.length?list.map(x=>'<tr><td>'+fmtDate(x.tanggal)+'</td><td>'+rupiah(x.omzet)+'</td><td>'+rupiah(x.modal)+'</td><td>'+rupiah(x.labaKotor)+'</td><td>'+rupiah(x.cashOut)+'</td><td>'+(canLabaBersih?rupiah(x.labaBersih):'—')+'</td><td>'+x.transaksi+'</td><td>'+new Date(x.closedAt).toLocaleString('id-ID')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty">Belum ada Tutup Hari.</td></tr>')+'</tbody></table></div></div>'}
@@ -4315,7 +4360,7 @@ if(!LOGIN_ENABLED){
   window.openCustomerDebt=function(id=''){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menambah/edit Hutang Pelanggan.');const x=db.customerDebts.find(a=>a.id===id);sheet.innerHTML='<h2>'+(x?'Edit':'Tambah')+' Hutang Pelanggan</h2><label>Nama Pelanggan</label><input id="cdName" value="'+safe(x?.nama||'')+'"><label>Nomor HP</label><input id="cdHp" type="tel" value="'+safe(x?.hp||'')+'"><label>Nomor Transaksi</label><input id="cdNo" value="'+safe(x?.no||'')+'"><label>Tanggal</label><input id="cdDate" type="date" value="'+safe(x?.tanggal||today())+'"><label>Total Hutang</label>'+moneyField('cdTotal',x?.total||'',false)+'<label>Catatan</label><textarea id="cdNote" rows="2">'+safe(x?.catatan||'')+'</textarea><div class="actions"><button class="gray" onclick="closeM()">Batal</button><button class="success" onclick="saveCustomerDebt(\''+safe(id)+'\')">Simpan</button></div>';modal.classList.add('show')}
   window.saveCustomerDebt=function(id){const nama=cdName.value.trim(),tanggal=cdDate.value,total=moneyValue(cdTotal.value);if(!nama||!tanggal||total<=0)return alert('Nama, tanggal, dan total hutang wajib diisi.');const old=db.customerDebts.find(x=>x.id===id),d={id:id||newId(),nama,hp:cdHp.value.trim(),no:cdNo.value.trim(),tanggal,total,paid:old?.paid||0,catatan:cdNote.value.trim(),payments:old?.payments||[]};if(d.paid>d.total)return alert('Pembayaran tidak boleh melebihi total hutang.');if(old)Object.assign(old,d);else db.customerDebts.unshift(d);persist(old?'Edit Hutang Pelanggan':'Tambah Hutang Pelanggan',nama+' '+rupiah(total));closeM();renderCustomerDebt();toast('✓ Hutang pelanggan tersimpan')}
   window.payCustomerDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menambah pembayaran.');const x=db.customerDebts.find(a=>a.id===id);if(!x)return;const s=prompt('Jumlah pembayaran:',String(Math.max(0,x.total-x.paid)));if(s===null)return;const amt=+s||0;if(amt<=0||amt>x.total-x.paid)return alert('Jumlah pembayaran tidak valid.');x.paid=(+x.paid||0)+amt;x.payments=x.payments||[];x.payments.unshift({id:newId(),tanggal:today(),jumlah:amt});persist('Pembayaran Hutang Pelanggan',x.nama+' '+rupiah(amt));renderCustomerDebt();toast('✓ Pembayaran dicatat')}
-  window.deleteCustomerDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menghapus Hutang Pelanggan.');const x=db.customerDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang pelanggan ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Pelanggan',deletedAt:new Date().toISOString()});db.customerDebts=db.customerDebts.filter(a=>a.id!==id);persist('Hapus Hutang Pelanggan',x.nama+' · riwayat pembayaran dipertahankan');renderCustomerDebt();toast('✓ Hutang pelanggan dihapus, riwayat pembayaran tetap tersimpan')}
+  window.deleteCustomerDebt=async function(id){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menghapus Hutang Pelanggan.');const x=db.customerDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang pelanggan ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Pelanggan',deletedAt:new Date().toISOString()});db.customerDebts=db.customerDebts.filter(a=>a.id!==id);await Promise.all([pjForceSyncKey('customerDebts'),pjForceSyncKey('deletedDebtHistory')]);persist('Hapus Hutang Pelanggan',x.nama+' · riwayat pembayaran dipertahankan');renderCustomerDebt();toast('✓ Hutang pelanggan dihapus, riwayat pembayaran tetap tersimpan')}
 
   // ---------- Hutang supplier ----------
   window.renderSupplierDebt=function(){if(!hasPermission('Lihat Hutang Supplier'))return alert('Anda tidak memiliki izin melihat Hutang Sales.');const f=document.getElementById('supDebtFilter')?.value||'all';const list=db.supplierDebts.filter(x=>f==='all'||(f==='paid'?(+x.paid||0)>=(+x.total||0):(+x.paid||0)<(+x.total||0)));const sorted=[...list].sort((a,b)=>{const lunasA=(+a.paid||0)>=(+a.total||0)?1:0,lunasB=(+b.paid||0)>=(+b.total||0)?1:0;return lunasA-lunasB;});const total=list.reduce((a,x)=>a+Math.max(0,(+x.total||0)-(+x.paid||0)),0);const rows=sorted.length?sorted.map((x,i)=>{
@@ -4349,7 +4394,7 @@ if(!LOGIN_ENABLED){
   window.openSupplierDebt=function(id=''){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menambah/edit Hutang Sales.');const x=db.supplierDebts.find(a=>a.id===id);sheet.innerHTML='<h2>'+(x?'Edit':'Tambah')+' Hutang Sales</h2><div class="form"><label>Nama Sales</label><input id="sdName" value="'+safe(x?.nama||'')+'"><label>Nomor HP</label><input id="sdHp" type="tel" value="'+safe(x?.hp||'')+'"><label>Nomor Transaksi/Pembelian</label><input id="sdNo" value="'+safe(x?.no||'')+'"><label>Tanggal Hutang</label><input id="sdDate" type="date" value="'+safe(x?.tanggal||today())+'"><label>Total Hutang</label>'+moneyField('sdTotal',x?.total||'',false)+'<label>Jatuh Tempo</label><input id="sdDue" type="date" value="'+safe(x?.jatuhTempo||today())+'"><label>Catatan</label><textarea id="sdNote" rows="2">'+safe(x?.catatan||'')+'</textarea></div><div class="actions"><button class="gray" onclick="closeM()">Kembali</button><button class="success" onclick="saveSupplierDebt(\''+safe(id)+'\')">Simpan</button></div>';modal.classList.add('show')}
   window.saveSupplierDebt=function(id){const nama=sdName.value.trim(),tanggal=sdDate.value,total=moneyValue(sdTotal.value);if(!nama||!tanggal||total<=0)return alert('Nama, tanggal, dan total hutang wajib diisi.');const old=db.supplierDebts.find(x=>x.id===id),d={id:id||newId(),nama,hp:sdHp.value.trim(),no:sdNo.value.trim(),tanggal,total,jatuhTempo:sdDue.value,paid:old?.paid||0,catatan:sdNote.value.trim(),payments:old?.payments||[]};if(d.paid>d.total)return alert('Pembayaran tidak boleh melebihi total hutang.');if(old)Object.assign(old,d);else db.supplierDebts.unshift(d);persist(old?'Edit Hutang Sales':'Tambah Hutang Sales',nama+' '+rupiah(total));closeM();renderSupplierDebt();toast('✓ Hutang sales tersimpan')}
   window.paySupplierDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menambah pembayaran.');const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;const s=prompt('Jumlah pembayaran:',String(Math.max(0,x.total-x.paid)));if(s===null)return;const amt=+s||0;if(amt<=0||amt>x.total-x.paid)return alert('Jumlah pembayaran tidak valid.');const saldoToko=(typeof window.cashHeld==='function')?window.cashHeld():Infinity;if(amt>saldoToko)return alert('Pembayaran melebihi uang di toko yang tersedia (Uang di Toko: '+rupiah(saldoToko)+').');x.paid=(+x.paid||0)+amt;x.payments=x.payments||[];x.payments.unshift({id:newId(),tanggal:today(),jumlah:amt});db.pengeluaran=Array.isArray(db.pengeluaran)?db.pengeluaran:[];const now=new Date();const pad=n=>String(n).padStart(2,'0');db.pengeluaran.unshift({id:newId(),timestamp:now.toISOString(),displayTime:`${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,date:today(),karyawan:(session?.name||session?.username||'-'),jumlah:amt,keterangan:'Bayar '+x.nama,jenis:'bayarSales',salesNama:x.nama});persist('Pembayaran Hutang Sales',x.nama+' '+rupiah(amt));renderSupplierDebt();if(typeof window.refreshTxnExpense==='function')window.refreshTxnExpense();toast('✓ Pembayaran dicatat, saldo toko berkurang otomatis')}
-  window.deleteSupplierDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menghapus Hutang Sales.');const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang sales ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Supplier',deletedAt:new Date().toISOString()});db.supplierDebts=db.supplierDebts.filter(a=>a.id!==id);persist('Hapus Hutang Sales',x.nama+' · riwayat pembayaran dipertahankan');renderSupplierDebt();toast('✓ Hutang sales dihapus, riwayat pembayaran tetap tersimpan')}
+  window.deleteSupplierDebt=async function(id){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menghapus Hutang Sales.');const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang sales ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Supplier',deletedAt:new Date().toISOString()});db.supplierDebts=db.supplierDebts.filter(a=>a.id!==id);await Promise.all([pjForceSyncKey('supplierDebts'),pjForceSyncKey('deletedDebtHistory')]);persist('Hapus Hutang Sales',x.nama+' · riwayat pembayaran dipertahankan');renderSupplierDebt();toast('✓ Hutang sales dihapus, riwayat pembayaran tetap tersimpan')}
 
   // Riwayat Bayar Sales (dipakai bersama oleh Laporan Dana di navigasi Transaksi & navigasi Laporan)
   window.getBayarSalesHistory=function(){db.pengeluaran=Array.isArray(db.pengeluaran)?db.pengeluaran:[];return db.pengeluaran.filter(x=>x&&x.jenis==='bayarSales')};
@@ -4748,8 +4793,9 @@ if(!LOGIN_ENABLED){
     ensureSetoranBos();
     return db.setoranBos.reduce((sum,x)=>sum+(Number(x.jumlah)||0),0);
   }
-  function pengeluaranTotalShared(){ return (db.pengeluaran||[]).reduce((sum,x)=>sum+(Number(x.jumlah)||0),0)+(Number(db.pengeluaranArsipTotal)||0); }
-  function cashHeld(){ return Math.max(0,cashSalesTotal()-setoranTotal()-pengeluaranTotalShared()); }
+  // pj-satu-sumber-cashheld: dulu ada rumus "Uang di Toko" duplikat di sini.
+  // Sekarang pakai window.cashHeld() yang sama dengan Beranda, PENGELUARAN,
+  // dan Laporan Dana — supaya kalau rumusnya diubah, cukup di 1 tempat saja.
   function bosActor(){ return (typeof getCurrentUser==='function' && getCurrentUser()) ? (getCurrentUser().name||getCurrentUser().username||'-') : (session?.name||session?.username||'-'); }
   function bosNow(){
     const d=new Date();
@@ -4762,7 +4808,7 @@ if(!LOGIN_ENABLED){
     if(!session) return;
     if(typeof nav==='function') nav('setoranBos');
     ensureSetoranBos();
-    const totalTunai=cashSalesTotal(), totalTransfer=transferSalesTotal(), totalSetor=setoranTotal(), dipegang=cashHeld();
+    const totalTunai=cashSalesTotal(), totalTransfer=transferSalesTotal(), totalSetor=setoranTotal(), dipegang=window.cashHeld();
     const rows=[...db.setoranBos,...(typeof window.getBayarSalesHistory==='function'?window.getBayarSalesHistory():[])].sort((a,b)=>String(b.timestamp||'').localeCompare(String(a.timestamp||''))).map(x=>`<tr>
       <td>${esc(x.karyawan||'-')}</td>
       <td><b>${bosRupiah(x.jumlah)}</b></td>
@@ -4784,7 +4830,7 @@ if(!LOGIN_ENABLED){
   document.head.appendChild(pjDanaRowStyle);
 
   window.openSetoranBosForm=function(){
-    const saldo=cashHeld();
+    const saldo=window.cashHeld();
     sheet.innerHTML=`<h2>Ambil Dana</h2>
       <div class="card" style="padding:10px;margin-bottom:10px"><div class="label">Uang di Toko</div><div class="value" style="font-size:24px">${bosRupiah(saldo)}</div></div>
       <label>Jumlah Ambil Dana</label><input id="setoranJumlah" class="money-input" type="text" inputmode="numeric" autocomplete="off" required placeholder="Rp 0">
@@ -4821,7 +4867,7 @@ if(!LOGIN_ENABLED){
     const raw=String(input?.value||'').replace(/[^0-9]/g,'');
     const jumlah=Number(raw)||0;
     const keterangan=String(document.getElementById('setoranKeterangan')?.value||'').trim();
-    const saldo=cashHeld();
+    const saldo=window.cashHeld();
     if(jumlah<=0) return alert('Jumlah setoran harus lebih dari Rp0.');
     if(jumlah>saldo) return alert('Jumlah setoran melebihi uang tunai yang tersedia.');
     const now=bosNow();
@@ -5078,7 +5124,7 @@ if(!LOGIN_ENABLED){
   window.openSalePaymentFinal=function(){if(window.__saleEditing){if(!confirm('Ada produk yang sedang diisi tapi belum dimasukkan ke keranjang. Produk itu tidak akan ikut terjual. Lanjut bayar tanpa produk ini?'))return;}if(!cart.length)return alert('Tambahkan minimal satu produk ke keranjang.');for(const x of cart){if(!(Number(x.unitPrice)>0))return alert('Isi Harga Jual Manual untuk semua produk.');const p=product(x.productId);if(!p)return alert('Produk tidak ditemukan: '+x.nama);if(x.qty>stockAt(p,x.loc))return alert('Stok '+locLabel(x.loc)+' untuk '+x.nama+' tidak cukup.');}const t=total();sheet.className='sheet confirm-sale-sheet';sheet.innerHTML=`<h2>Pembayaran Penjualan</h2><div class="confirm-sale-body"><div class="card" style="padding:10px"><b>Ringkasan Transaksi</b>${cart.map(x=>`<div class="confirm-sale-row"><span>${escSafe(x.nama)} × ${x.qty}<br><small>${money(x.unitPrice)} / unit</small></span><b>${money(x.unitPrice*x.qty)}</b></div>`).join('')}<div class="confirm-sale-row"><span>Total Penjualan</span><b>${money(t)}</b></div><div class="confirm-sale-row"><span>Nilai Modal</span><b>${money(cart.reduce((a,x)=>{const p=product(x.productId);return a+(Number(p?.modal)||0)*x.qty},0))}</b></div><div class="confirm-sale-row"><span>Estimasi Laba</span><b>${money(cart.reduce((a,x)=>{const p=product(x.productId);return a+(Number(x.unitPrice)||0)*x.qty-(Number(p?.modal)||0)*x.qty},0))}</b></div></div><div style="margin-top:10px"><label>Metode Pembayaran</label><div class="pj-pay-toggle" id="salePayToggleFinal"><button type="button" class="pj-pay-opt" data-method="TUNAI" onclick="selectSalePaymentFinal('TUNAI')">💵 TUNAI</button><button type="button" class="pj-pay-opt" data-method="TRANSFER" onclick="selectSalePaymentFinal('TRANSFER')">💳 TRANSFER</button></div><input type="hidden" id="salePaymentMethodFinal" value=""><div id="salePayError" class="dangerText" style="font-size:12px;margin-top:6px;display:none">Pilih Tunai atau Transfer dulu.</div><div class="card" style="padding:10px;margin-top:8px"><div class="muted">Pembayaran</div><div style="font-size:20px;font-weight:900">Sesuai Total Penjualan</div></div></div></div><div class="confirm-sale-actions"><button type="button" class="gray" onclick="backToSaleCart()">Kembali</button><button type="button" class="success" id="saveSaleFinalBtn" onclick="saveSaleCartFinal()" disabled style="opacity:.5">SIMPAN TRANSAKSI</button></div>`;modal.classList.add('show');updateSalePaymentFinal();};
   window.selectSalePaymentFinal=function(method){const input=document.getElementById('salePaymentMethodFinal');if(input)input.value=method;document.querySelectorAll('#salePayToggleFinal .pj-pay-opt').forEach(b=>b.classList.toggle('active',b.dataset.method===method));const err=document.getElementById('salePayError');if(err)err.style.display='none';const btn=document.getElementById('saveSaleFinalBtn');if(btn){btn.disabled=false;btn.style.opacity='1'}updateSalePaymentFinal();};
   window.updateSalePaymentFinal=function(){const ch=document.getElementById('saleChangeFinal');if(ch)ch.textContent='Rp 0';};
-  window.saveSaleCartFinal=function(){const method=document.getElementById('salePaymentMethodFinal')?.value||'';if(!method){const err=document.getElementById('salePayError');if(err)err.style.display='block';return}const btn=document.getElementById('saveSaleFinalBtn');if(window.__savingSaleFinal)return;window.__savingSaleFinal=true;if(btn){btn.disabled=true;btn.textContent='MENYIMPAN...'};try{const t=total(),cash=t;for(const x of cart){const p=product(x.productId);if(!p)throw new Error('Produk tidak ditemukan: '+x.nama);if(x.qty>stockAt(p,x.loc))throw new Error('Stok '+locLabel(x.loc)+' untuk '+x.nama+' tidak cukup.');}const oldP=JSON.stringify(db.products),oldM=JSON.stringify(db.moves),no=nextTransactionNo(),date=today(),created=[];for(const x of cart){const p=product(x.productId),modalTotal=(Number(p.modal)||0)*x.qty,itemTotal=(Number(x.unitPrice)||0)*x.qty;setStockAt(p,x.loc,stockAt(p,x.loc)-x.qty);created.push({id:newId(),no,type:'Penjualan Toko',product:p.nama,productId:p.id,qty:x.qty,date,note:'',loc:x.loc,unitPrice:Number(x.unitPrice)||0,discount:0,total:itemTotal,laba:itemTotal-modalTotal,modalTotal,payment:method,paymentAmount:method==='TUNAI'?cash:t,user:session?.username||'-',saleMode:'MANUAL'});}db.moves.unshift(...created);pushSaleNotification(created);save();toast('✓ Penjualan berhasil disimpan');closeM();cart=[];setTimeout(()=>page('sales'),120);}catch(e){try{db.products=JSON.parse(oldP);db.moves=JSON.parse(oldM);localStorage.setItem(KEY,JSON.stringify(db));}catch(_){ } alert(e.message||'Transaksi gagal disimpan.');if(btn){btn.disabled=false;btn.textContent='SIMPAN TRANSAKSI'}}finally{window.__savingSaleFinal=false;}};
+  window.saveSaleCartFinal=function(){const method=document.getElementById('salePaymentMethodFinal')?.value||'';if(!method){const err=document.getElementById('salePayError');if(err)err.style.display='block';return}const btn=document.getElementById('saveSaleFinalBtn');if(window.__savingSaleFinal)return;window.__savingSaleFinal=true;if(btn){btn.disabled=true;btn.textContent='MENYIMPAN...'};try{const t=total(),cash=t;for(const x of cart){const p=product(x.productId);if(!p)throw new Error('Produk tidak ditemukan: '+x.nama);if(x.qty>stockAt(p,x.loc))throw new Error('Stok '+locLabel(x.loc)+' untuk '+x.nama+' tidak cukup.');}const oldP=JSON.stringify(db.products),oldM=JSON.stringify(db.moves),no=nextTransactionNo(),date=today(),created=[];for(const x of cart){const p=product(x.productId),modalTotal=(Number(p.modal)||0)*x.qty,itemTotal=(Number(x.unitPrice)||0)*x.qty;setStockAt(p,x.loc,stockAt(p,x.loc)-x.qty);created.push({id:newId(),no,type:'Penjualan Toko',product:p.nama,productId:p.id,qty:x.qty,date,note:'',loc:x.loc,unitPrice:Number(x.unitPrice)||0,discount:0,total:itemTotal,laba:itemTotal-modalTotal,modalTotal,payment:method,paymentAmount:method==='TUNAI'?cash:t,user:session?.username||'-',saleMode:'MANUAL'});}db.moves.unshift(...created);pushSaleNotification(created);toast('✓ Penjualan berhasil disimpan');closeM();cart=[];setTimeout(()=>page('sales'),120);save().then(ok=>{ if(ok) toast('✓ Penjualan tersimpan & online'); });}catch(e){try{db.products=JSON.parse(oldP);db.moves=JSON.parse(oldM);localStorage.setItem(KEY,JSON.stringify(db));}catch(_){ } alert(e.message||'Transaksi gagal disimpan.');if(btn){btn.disabled=false;btn.textContent='SIMPAN TRANSAKSI'}}finally{window.__savingSaleFinal=false;}};
   window.renderSalesReport=function(){cart=[];app.innerHTML=`<style id="pj-sales-nav-modern">
 .pj-sales-page{padding:2px 0 24px;max-width:720px;margin:auto}.pj-sales-hero{background:linear-gradient(135deg,#102a56,#102a56);color:#ffffff;border-radius:18px;padding:18px 16px;margin-bottom:12px;box-shadow:0 8px 22px rgba(16,42,86,.16)}.pj-sales-hero h2{margin:0;font-size:20px}.pj-sales-hero p{margin:5px 0 0;font-size:11px;color:rgba(255,255,255,.75)}.pj-sales-menu-title{font-size:11px;font-weight:900;letter-spacing:.7px;color:#102a56;margin:14px 2px 8px}.pj-sales-actions{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:8px}.pj-sales-action{border:1px solid #dce5f2!important;background:#ffffff!important;color:#14284b!important;min-height:78px!important;border-radius:14px!important;padding:10px 7px!important;box-shadow:0 2px 8px rgba(20,40,75,.05);display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px}.pj-sales-action strong{font-size:13px}.pj-sales-action span{font-size:9px;color:#718096;font-weight:600}.pj-sales-action.jual{background:#102a56!important;color:#ffffff!important;border-color:#102a56!important}.pj-sales-action.jual span{color:rgba(255,255,255,.72)}.pj-sales-action:active{transform:scale(.98)}.pj-sales-history{margin-top:14px!important;border-radius:16px!important;padding:13px!important}.pj-sales-history-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.pj-sales-history-head b{font-size:13px}.pj-sales-history-head span{font-size:9px;color:#718096}.pj-sales-filter{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:9px}.pj-sales-filter input{min-width:0}.pj-sales-filter button{padding:10px 12px}.pj-sales-summary .stats{gap:7px}.pj-sales-summary .card{padding:10px;border-radius:11px}.pj-sales-summary .label{font-size:9px}.pj-sales-summary .value{font-size:13px}@media(max-width:380px){.pj-sales-actions{gap:6px}.pj-sales-action{min-height:72px!important}.pj-sales-action strong{font-size:12px}.pj-sales-action span{font-size:8px}.pj-sales-history{padding:10px!important}}
 </style><div class="pj-sales-page"><div class="pj-sales-menu-title">RIWAYAT PENJUALAN</div><div class="pj-sales-actions sales-menu-actions sales-menu-actions-fixed"><button type="button" class="pj-sales-action" onclick="page('restaurantUsage')"><span class="pj-sales-icon">🍽️</span><strong>Restoran</strong><span>Pemakaian barang</span></button><button type="button" class="pj-sales-action jual" onclick="openSaleCart()"><span class="pj-sales-icon">🛒</span><strong>Jual Produk</strong><span>Penjualan</span></button></div><div class="card pj-sales-history"><div class="pj-sales-history-head"><b>Riwayat Penjualan</b><span>Data transaksi</span></div><div class="pj-sales-filter"><input id="salesDateFinal" type="date" value="${today()}" onchange="refreshSalesReportFinal()"><button class="gray" onclick="salesAllFinal()">Semua</button></div><div id="salesSummaryFinal" class="pj-sales-summary"></div><div class="tablewrap" style="margin-top:8px"><table class="table"><thead><tr><th>Tanggal</th><th>Barang</th><th>Qty</th><th>Harga Jual</th><th>Modal</th><th>Omzet</th><th>Laba</th><th>Pembayaran</th><th>Lokasi</th></tr></thead><tbody id="salesRowsFinal"></tbody></table></div></div></div>`;refreshSalesReportFinal();};
@@ -6682,7 +6728,7 @@ if(!LOGIN_ENABLED){
     bindExpRangePicker();
     refreshExpenseReport();
   };
-  window.deleteAllPengeluaran=function(){
+  window.deleteAllPengeluaran=async function(){
     if(!requireAdmin())return;
     db.pengeluaran=Array.isArray(db.pengeluaran)?db.pengeluaran:[];
     if(!db.pengeluaran.length)return alert('Belum ada transaksi pengeluaran.');
@@ -6690,6 +6736,7 @@ if(!LOGIN_ENABLED){
     const totalDihapus=db.pengeluaran.reduce((sum,x)=>sum+(Number(x.jumlah)||0),0);
     db.pengeluaranArsipTotal=(Number(db.pengeluaranArsipTotal)||0)+totalDihapus;
     db.pengeluaran=[];
+    await pjForceSyncKey('pengeluaran');
     logActivity('Hapus Semua Pengeluaran','Semua riwayat pengeluaran dihapus, total pengeluaran tetap tersimpan');
     save();
     refreshExpenseReport();
@@ -6895,10 +6942,14 @@ if(!LOGIN_ENABLED){
     // Uang Tunai di Toko real-time: sama seperti KAS TOKO di Beranda —
     // total penjualan TUNAI sepanjang waktu dikurangi seluruh Ambil Dana & Pengeluaran (termasuk Bayar Sales),
     // bukan hanya penjualan pada periode yang dipilih.
-    const kasCashSales=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0);
-    const kasSetoran=(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
-    const kasPengeluaran=(db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
-    const kasTokoRealtime=Math.max(0,kasCashSales-kasSetoran-kasPengeluaran);
+    // pj-hometkastoko-fix-v1: dulu di sini juga lupa memasukkan arsip
+    // penjualan tunai & pengeluaran lama, sekarang pakai cashHeld() yang
+    // sama persis dengan Beranda supaya angkanya benar-benar cocok.
+    const kasTokoRealtime=(typeof window.cashHeld==='function')?window.cashHeld():Math.max(0,
+      (db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0)
+      -(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)
+      -((db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)+(Number(db.pengeluaranArsipTotal)||0))
+    );
     const body=document.getElementById('danaReportBody');
     if(!body)return;
     const periodOpt=v=>v===period?' selected':'';
@@ -10648,7 +10699,7 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
       }
     };
   }
-  window.deleteAllDanaHistory=function(){
+  window.deleteAllDanaHistory=async function(){
     if(typeof requireAdmin==='function' && !requireAdmin())return;
     db.setoranBos=Array.isArray(db.setoranBos)?db.setoranBos:[];
     db.pengeluaran=Array.isArray(db.pengeluaran)?db.pengeluaran:[];
@@ -10661,6 +10712,7 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
     db.pengeluaranArsipTotal=(Number(db.pengeluaranArsipTotal)||0)+totalBayarSales;
     db.setoranBos=[];
     db.pengeluaran=db.pengeluaran.filter(x=>!(x&&x.jenis==='bayarSales'));
+    await Promise.all([pjForceSyncKey('setoranBos'),pjForceSyncKey('pengeluaran')]);
     if(typeof logActivity==='function')logActivity('Hapus Riwayat Dana','Semua riwayat Ambil Dana & Bayar Sales dihapus, saldo tidak berubah');
     save();
     if(typeof window.refreshDanaReport==='function')window.refreshDanaReport();
@@ -10685,12 +10737,13 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
       }
     };
   }
-  window.deleteAllRestoHistory=function(){
+  window.deleteAllRestoHistory=async function(){
     if(typeof requireAdmin==='function' && !requireAdmin())return;
-    const count=(db.moves||[]).filter(x=>String(x.type||'').toLowerCase().includes('restoran')).length;
-    if(!count){alert('Belum ada riwayat restoran.');return}
+    const removed=(db.moves||[]).filter(x=>String(x.type||'').toLowerCase().includes('restoran'));
+    if(!removed.length){alert('Belum ada riwayat restoran.');return}
     if(!confirm('⚠️ Yakin ingin menghapus SEMUA riwayat restoran? Tindakan ini tidak bisa dibatalkan.'))return;
     db.moves=(db.moves||[]).filter(x=>!String(x.type||'').toLowerCase().includes('restoran'));
+    await pjRemoteDeleteMany('putrajaya_moves',removed.map(x=>x.id));
     if(typeof logActivity==='function')logActivity('Hapus Riwayat Restoran','Semua riwayat transaksi restoran dihapus');
     save();
     if(typeof window.refreshRestoReport==='function')window.refreshRestoReport();
@@ -10834,14 +10887,15 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
     const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=url;a.download='laporan_putrajaya_'+start+'_sd_'+end+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('✓ CSV berhasil dibuat');
   };
-  window.deleteAllSalesHistory=function(){
+  window.deleteAllSalesHistory=async function(){
     if(typeof requireAdmin==='function' && !requireAdmin())return;
-    const count=(db.moves||[]).filter(x=>x.type==='Penjualan Toko').length;
-    if(!count){alert('Belum ada riwayat penjualan.');return}
+    const removed=(db.moves||[]).filter(x=>x.type==='Penjualan Toko');
+    if(!removed.length){alert('Belum ada riwayat penjualan.');return}
     if(!confirm('⚠️ Yakin ingin menghapus SEMUA riwayat penjualan? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Tindakan ini tidak bisa dibatalkan.'))return;
-    const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);
+    const tunaiDihapus=removed.filter(x=>x&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);
     db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;
     db.moves=(db.moves||[]).filter(x=>x.type!=='Penjualan Toko');
+    await pjRemoteDeleteMany('putrajaya_moves',removed.map(x=>x.id));
     if(typeof logActivity==='function')logActivity('Hapus Riwayat Penjualan','Semua riwayat penjualan toko dihapus, saldo kas & stok tetap aman');
     save();
     refreshReport();
