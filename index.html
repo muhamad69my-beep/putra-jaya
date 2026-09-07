@@ -51,7 +51,7 @@ main{max-width:1100px;margin:auto;padding:12px 12px 100px}.stats{display:grid;gr
 button{border:0;border-radius:10px;padding:10px 12px;background:#FFFFFF;color:#ffffff;font-weight:700;cursor:pointer}.danger{background:#e55353}.success{background:#16a05d}.gray{background:#718096}.pj-addcart{background:#2f6fed}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.product img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:#eaf3ff}.product h3{font-size:14px;margin:8px 0 4px}.muted{font-size:11px;color:#718096}.price{font-size:13px;font-weight:700;margin-top:6px}.stock{font-size:12px;margin-top:5px}.actions{display:flex;gap:5px;margin-top:8px}.actions button{flex:1;font-size:11px;padding:8px}
 .nav{display:none;position:absolute;right:15px;top:58px;width:230px;background:#ffffff;border:1px solid #dce5f2;border-radius:14px;padding:7px;box-shadow:0 10px 30px #102A5622;z-index:30}.nav.show{display:grid}.nav button{background:#ffffff;color:#102a56;border-radius:9px;width:100%;padding:11px 12px;font-size:13px;text-align:left}.nav button:hover{background:#f7f9fc}.nav button.active{background:#eaf3ff;color:#102a56;font-weight:800}
-.modal{display:none;position:fixed;top:64px;right:0;bottom:0;left:0;background:#102A5688;z-index:20;align-items:flex-end}.modal.show{display:flex}.sheet{background:#ffffff;width:100%;max-width:700px;margin:auto;padding:17px;border-radius:18px 18px 0 0;max-height:calc(100vh - 64px);overflow:auto}.category-manager-sheet{padding-top:24px!important;max-height:calc(100vh - 64px)!important;box-sizing:border-box}.category-manager-sheet h2{font-size:20px}.sheet.sales-sheet{max-height:92vh;overflow:hidden}.sheet.sales-sheet form{min-height:0;max-height:calc(92vh - 70px);overflow:auto;padding-bottom:4px}.sheet.sales-sheet .sale-cart-scroll{min-height:0;max-height:calc(92vh - 70px);overflow:auto;padding-bottom:90px}.sheet.sales-sheet .sale-actions{position:sticky;bottom:0;z-index:3;background:#ffffff;padding:10px 0 calc(10px + env(safe-area-inset-bottom));margin-top:10px;border-top:1px solid #dce5f2}.sheet.confirm-sale-sheet{max-height:92vh;overflow:hidden;display:flex;flex-direction:column}.confirm-sale-body{min-height:0;overflow:auto;padding-right:2px}.confirm-sale-actions{display:flex;gap:8px;flex:none;position:sticky;bottom:0;z-index:4;background:#ffffff;padding:10px 0 calc(10px + env(safe-area-inset-bottom));border-top:1px solid #dce5f2;margin-top:8px}.confirm-sale-actions button{flex:1;min-height:44px}.confirm-sale-info{display:grid;gap:8px}.confirm-sale-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #eaf3ff}.confirm-sale-row:last-child{border-bottom:0}.confirm-sale-row span:first-child{color:#718096;font-size:12px}.confirm-sale-row b{font-size:13px;text-align:right}h2{margin:0 0 12px}
+.modal{display:none;position:fixed;top:72px;right:0;bottom:74px;left:0;background:#102A5688;z-index:20;align-items:flex-end}.modal.show{display:flex}@media(max-width:699px){.modal{bottom:68px}}.sheet{background:#ffffff;width:100%;max-width:700px;margin:auto;padding:17px;border-radius:18px 18px 0 0;max-height:100%;overflow:auto}.category-manager-sheet{padding-top:24px!important;max-height:calc(100vh - 64px)!important;box-sizing:border-box}.category-manager-sheet h2{font-size:20px}.sheet.sales-sheet{max-height:92vh;overflow:hidden}.sheet.sales-sheet form{min-height:0;max-height:calc(92vh - 70px);overflow:auto;padding-bottom:4px}.sheet.sales-sheet .sale-cart-scroll{min-height:0;max-height:calc(92vh - 70px);overflow:auto;padding-bottom:90px}.sheet.sales-sheet .sale-actions{position:sticky;bottom:0;z-index:3;background:#ffffff;padding:10px 0 calc(10px + env(safe-area-inset-bottom));margin-top:10px;border-top:1px solid #dce5f2}.sheet.confirm-sale-sheet{max-height:92vh;overflow:hidden;display:flex;flex-direction:column}.confirm-sale-body{min-height:0;overflow:auto;padding-right:2px}.confirm-sale-actions{display:flex;gap:8px;flex:none;position:sticky;bottom:0;z-index:4;background:#ffffff;padding:10px 0 calc(10px + env(safe-area-inset-bottom));border-top:1px solid #dce5f2;margin-top:8px}.confirm-sale-actions button{flex:1;min-height:44px}.confirm-sale-info{display:grid;gap:8px}.confirm-sale-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #eaf3ff}.confirm-sale-row:last-child{border-bottom:0}.confirm-sale-row span:first-child{color:#718096;font-size:12px}.confirm-sale-row b{font-size:13px;text-align:right}h2{margin:0 0 12px}
 .sheet.permission-sheet{max-height:92vh;overflow:hidden;display:flex;flex-direction:column}.permission-body{min-height:0;overflow:auto;padding-right:2px;padding-bottom:86px}.permission-actions{position:fixed!important;left:0!important;right:0!important;bottom:74px!important;z-index:10020!important;margin:0!important;display:flex;gap:8px;padding:10px 16px!important;padding-bottom:calc(10px + env(safe-area-inset-bottom))!important;background:rgba(255,255,255,.98);border-top:1px solid #dce5f2;box-shadow:0 -5px 16px rgba(20,40,75,.12);box-sizing:border-box}.permission-actions button{flex:1 1 0;min-height:48px;font-size:14px}
 @media(max-width:699px){.permission-body{padding-bottom:82px}.permission-actions{bottom:68px!important}}
 @media(min-width:700px){.permission-actions{max-width:700px;left:50%!important;right:auto!important;transform:translateX(-50%);border-radius:12px 12px 0 0}}
@@ -77,7 +77,7 @@ form{display:grid;gap:9px}label{font-size:11px;font-weight:700}input,select,text
 .pj-txn-table th:first-child{background:#f7f9fc;z-index:2}.pill{display:inline-block;padding:4px 7px;border-radius:20px;background:#eaf3ff;font-size:10px}.dangerText{color:#e55353;font-weight:700}.successText{color:#16a05d;font-weight:700}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#14284b;color:#ffffff;padding:10px 15px;border-radius:10px;display:none;z-index:50;font-size:12px}
 .update-overlay{display:none;position:fixed;inset:0;background:#102A5688;z-index:10000;align-items:center;justify-content:center;padding:20px}.update-overlay.show{display:flex}.update-box{width:100%;max-width:360px;background:#ffffff;border-radius:18px;padding:22px;box-shadow:0 20px 60px #102A5688;text-align:center}.update-box .icon{font-size:34px;margin-bottom:6px}.update-box h2{margin:0 0 8px;font-size:18px}.update-box p{margin:0 0 18px;font-size:13px;color:#718096}.update-box .actions{display:flex;gap:8px}.update-box .actions button{flex:1;min-height:46px;font-size:14px}.update-box .actions button.gray{background:#102a56!important}
-@media(min-width:700px){.stats{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:repeat(4,1fr)}.modal{align-items:center}.sheet{border-radius:18px;max-height:calc(100vh - 64px)}}
+@media(min-width:700px){.stats{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:repeat(4,1fr)}.modal{align-items:center}.sheet{border-radius:18px;max-height:100%}}
 
 .login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#102a56,#14284b);display:flex;align-items:center;justify-content:center;padding:20px;z-index:9999}.login-box{width:100%;max-width:390px;background:#ffffff;border-radius:22px;padding:24px;box-shadow:0 20px 60px #102A5688}.login-box h2{margin:0 0 6px}.login-box .brand{font-size:12px;color:#718096;margin-bottom:20px}.login-box label{display:block;font-size:12px;font-weight:700;margin:12px 0 6px}.login-box input,.login-box select{width:100%;padding:12px;border:1px solid #dce5f2;border-radius:10px;font-size:14px}
 .pj-pass-wrap{position:relative}.pj-pass-wrap input{padding-right:42px!important}
@@ -368,9 +368,10 @@ header{position:fixed!important;left:0;right:0;top:0;height:auto;z-index:100!imp
 /* Bottom navigation/action bars stay fixed; existing selectors keep their visuals. */
 .sales-menu-actions-fixed{position:fixed!important;}
 /* Modal is fixed and blocks background scrolling; only sheet content can move. */
-#modal{position:fixed!important;inset:0!important;overflow:hidden!important;overscroll-behavior:none!important;}
+#modal{position:fixed!important;top:72px!important;right:0!important;bottom:74px!important;left:0!important;overflow:hidden!important;overscroll-behavior:none!important;}
+@media(max-width:699px){#modal{bottom:68px!important}}
 #modal .sheet{
-  max-height:92vh!important;
+  max-height:100%!important;
   overflow-y:auto!important;
   overflow-x:hidden!important;
   overscroll-behavior:contain!important;
@@ -1465,42 +1466,26 @@ html body #app .pj-omset-payment .value{
 .pj-ref-kastoko-sub{font-size:12px;color:#4a7fc7;margin-top:6px}
 </style>
 <style id="pj-pd-style">
-.pj-pd-hero{display:flex;gap:14px;align-items:center;background:linear-gradient(135deg,#EAF3FF,#ffffff);border:1px solid #DCE5F2;border-radius:18px;padding:16px;margin-bottom:14px}
-.pj-pd-photo{width:88px;height:88px;border-radius:16px;object-fit:cover;border:2px solid #fff;box-shadow:0 4px 14px rgba(20,40,75,.14);flex:none;background:#fff}
-.pj-pd-name{font-size:19px;font-weight:800;color:#14284b;margin:0 0 4px;line-height:1.2}
-.pj-pd-meta{font-size:12px;color:#718096;font-weight:600}
-.pj-pd-badge{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800}
-.pj-pd-badge.habis{background:#FDEEEE;color:#E55353}
-.pj-pd-badge.menipis{background:#FFF7E6;color:#F2A900}
-.pj-pd-badge.aman{background:#EAFBF3;color:#16A05D}
-.pj-pd-highlight{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.pj-pd-highlight .pj-pd-total{background:#F7F9FC;border:1px solid #EAF3FF;border-radius:16px;padding:14px 16px}
-.pj-pd-highlight .pj-pd-total .pj-pd-stat-value{font-size:20px}
-.pj-pd-highlight .pj-pd-sold{background:#F7F9FC;border:1px solid #EAF3FF;border-radius:16px;padding:14px 16px}
-.pj-pd-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
-.pj-pd-stat{background:#F7F9FC;border:1px solid #EAF3FF;border-radius:14px;padding:12px 13px;display:flex;align-items:center;gap:10px}
-.pj-pd-stat-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
-.pj-pd-stat-icon.blue{background:#EAF3FF;color:#1976F3}
-.pj-pd-stat-icon.green{background:#EAFBF3;color:#16A05D}
-.pj-pd-stat-icon.purple{background:#F3EEFF;color:#7654E8}
-.pj-pd-stat-icon.amber{background:#FFF7E6;color:#F2A900}
-.pj-pd-stat-icon.red{background:#FDEEEE;color:#E55353}
-.pj-pd-stat-label{font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.3px}
-.pj-pd-stat-value{font-size:18px;font-weight:800;color:#14284b;margin-top:2px}
-.pj-pd-info{background:#fff;border:1px solid #DCE5F2;border-radius:16px;padding:14px 16px;margin-bottom:14px}
-.pj-pd-info-title{font-size:13px;font-weight:800;color:#14284b;margin-bottom:6px}
-.pj-pd-info-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #F0F4FA;font-size:13px}
-.pj-pd-info-row:last-child{border-bottom:0}
-.pj-pd-info-label{color:#718096;display:flex;align-items:center;gap:6px}
-.pj-pd-info-value{font-weight:800;color:#14284b}
+.pj-pd-photo-wrap{position:relative;width:100%;aspect-ratio:1/1;border-radius:16px;overflow:hidden;margin-bottom:8px;background:#fff}
+.pj-pd-photo{display:block;width:100%;height:100%;object-fit:cover}
+.pj-pd-status-badge{position:absolute;right:8px;top:8px;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800}
+.pj-pd-status-badge.habis{background:#FDEEEE;color:#E55353}
+.pj-pd-status-badge.menipis{background:#FFF7E6;color:#F2A900}
+.pj-pd-status-badge.aman{background:#EAFBF3;color:#16A05D}
+.pj-pd-toprow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.pj-pd-name{font-size:17px;font-weight:800;color:#14284b;margin:0;line-height:1.25}
+.pj-pd-meta{font-size:12px;color:#718096;font-weight:600;margin-top:2px}
+.pj-pd-delete{display:flex;align-items:center;gap:5px;flex:none;background:#D32F2F;color:#fff;border:none;border-radius:11px;padding:9px 13px;font-weight:800;font-size:12.5px;white-space:nowrap}
+.pj-pd-stats{display:flex;gap:18px;margin-bottom:14px;background:#fff;border:1px solid #DCE5F2;border-radius:16px;padding:2px 16px}
+.pj-pd-col{flex:1;min-width:0}
+.pj-pd-stat{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #F0F4FA}
+.pj-pd-col .pj-pd-stat:last-child{border-bottom:0}
+.pj-pd-stat-label{font-size:13px;font-weight:600;color:#718096}
+.pj-pd-stat-value{font-size:13px;font-weight:800;color:#14284b}
 .pj-pd-actions{display:flex;gap:10px}
 .pj-pd-actions button{flex:1;border-radius:13px;padding:13px;font-weight:800;font-size:14px;border:none}
 .pj-pd-actions .pj-pd-edit{background:linear-gradient(135deg,#1976F3,#1361d1);color:#fff;box-shadow:0 6px 16px rgba(25,118,243,.28)}
 .pj-pd-actions .pj-pd-close{background:#102A56;color:#fff}
-#modal .sheet .pj-pd-actions .pj-pd-delete{background:#D32F2F!important;color:#ffffff!important;border-color:#D32F2F!important;flex:0 0 auto;width:52px;padding:13px 0;font-size:18px;line-height:1}
-.pj-pd-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
-.pj-pd-header h2{margin:0}
-.pj-pd-header .pj-pd-delete-top{background:#D32F2F!important;color:#ffffff!important;border:none;border-radius:11px;padding:9px 14px;font-weight:800;font-size:12.5px;white-space:nowrap;flex:none}
 </style>
 <style id="pj-notif-bell-style">
 .pj-notif-bell{position:relative;display:flex;align-items:center;justify-content:center;width:38px;height:38px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.55);border-radius:10px;color:#fff;padding:0;cursor:pointer}
@@ -1911,10 +1896,19 @@ async function pullMiscFromCloud(){
   try{
     const rows=await apiGet('putrajaya_appdata');
     if(!rows.length)return false;
+    const remoteMap={};
     rows.forEach(r=>{
       if(r.key==='employeesUsers'){ if(r.value)applyRemoteEmployeesUsers(r.value); return; }
-      if(PJ_MISC_KEYS.includes(r.key) && r.value!==null) db[r.key]=r.value;
+      remoteMap[r.key]=r.value;
     });
+    // Gabungkan (merge) seperti pjMergePullAll, bukan menimpa langsung,
+    // supaya data lokal yang belum sempat ke-sync tidak ketimpa/hilang.
+    PJ_ID_KEYED_MISC.forEach(k=>{if(remoteMap[k]!==undefined&&remoteMap[k]!==null)db[k]=pjMergeById(db[k],remoteMap[k],'id')});
+    if(remoteMap.categories!=null)db.categories=pjMergeStrings(db.categories,remoteMap.categories);
+    if(remoteMap.dayClosings!=null)db.dayClosings=pjMergeById(db.dayClosings,remoteMap.dayClosings,'tanggal');
+    if(remoteMap.payments!=null)db.payments=Object.assign({},db.payments||{},remoteMap.payments||{});
+    if(remoteMap.settings!=null)db.settings=Object.assign({},db.settings||{},remoteMap.settings||{});
+    ['pengeluaranArsipTotal','setoranArsipTotal','salesTunaiArsipTotal'].forEach(k=>{if(remoteMap[k]!=null)db[k]=remoteMap[k]});
     localStorage.setItem(KEY,JSON.stringify(db));
     return true;
   }catch(e){console.warn('Gagal menarik data lain dari cloud',e);return false;}
@@ -3255,32 +3249,30 @@ window.setProductStatsFilter=setProductStatsFilter;
 window.setProductLocationFilter=setProductLocationFilter;
 function showProductDetail(id){
  const p=(db.products||[]).find(x=>String(x.id)===String(id)); if(!p)return;
- const stock=productTotalStock(p), sold=salesQtyByProduct().get(String(p.id))||0, min=Number(p.min??3);
+ const stock=productTotalStock(p), min=Number(p.min??3);
  const status=stock<=0?'HABIS':stock<=min?'MENIPIS':'AMAN';
  const statusClass=stock<=0?'habis':stock<=min?'menipis':'aman';
- const icons=['🏬','📦','🏭','🏢','📍'];
- const colors=['blue','purple','amber','green','red'];
- const locCards=LOCATION_NAMES.map((l,idx)=>`<div class="pj-pd-stat"><div class="pj-pd-stat-icon ${colors[idx%colors.length]}">${icons[idx]||'📍'}</div><div><div class="pj-pd-stat-label">Stok ${esc(locLabel(l))}</div><div class="pj-pd-stat-value">${stockAt(p,l)}</div></div></div>`).join('');
  const modalValue=stock*(Number(p.modal)||0);
- sheet.innerHTML=`<div class="pj-pd-header"><h2>Detail Produk</h2><button type="button" class="pj-pd-delete-top" onclick="closeM();delProduct('${p.id}')" title="Hapus Produk">Hapus Produk</button></div>
- <div class="pj-pd-hero">
+ const sold=(typeof salesQtyByProduct==='function'?salesQtyByProduct().get(String(p.id)):0)||0;
+ const rightCol=`<div class="pj-pd-stat"><span class="pj-pd-stat-label">Total Stok</span><span class="pj-pd-stat-value">${stock}</span></div>`+LOCATION_NAMES.map(l=>`<div class="pj-pd-stat"><span class="pj-pd-stat-label">Stok ${esc(locLabel(l))}</span><span class="pj-pd-stat-value">${stockAt(p,l)}</span></div>`).join('');
+ const leftCol=`<div class="pj-pd-stat"><span class="pj-pd-stat-label">Harga Modal</span><span class="pj-pd-stat-value">${modalText('Toko',p.modal)}</span></div>
+   <div class="pj-pd-stat"><span class="pj-pd-stat-label">Nilai Modal</span><span class="pj-pd-stat-value">${modalText('Toko',modalValue)}</span></div>
+   <div class="pj-pd-stat"><span class="pj-pd-stat-label">Stok Minimum</span><span class="pj-pd-stat-value">${min}</span></div>
+   <div class="pj-pd-stat"><span class="pj-pd-stat-label">Terjual</span><span class="pj-pd-stat-value">${sold} pcs</span></div>`;
+ sheet.innerHTML=`<div class="pj-pd-photo-wrap">
    <img class="pj-pd-photo" src="${p.foto||DEFAULT_PRODUCT_PHOTO}">
+   <span class="pj-pd-status-badge ${statusClass}">● ${status}</span>
+ </div>
+ <div class="pj-pd-toprow">
    <div>
      <div class="pj-pd-name">${esc(p.nama)}</div>
      <div class="pj-pd-meta">${esc(p.kode||'-')} · ${esc(productCategoryValue(p)||'Tanpa Kategori')}</div>
-     <span class="pj-pd-badge ${statusClass}">● ${status}</span>
    </div>
+   <button type="button" class="pj-pd-delete" onclick="closeM();delProduct('${p.id}')" title="Hapus Produk">🗑 Hapus</button>
  </div>
- <div class="pj-pd-highlight">
-   <div class="pj-pd-total"><div class="pj-pd-stat-label">Total Stok</div><div class="pj-pd-stat-value">${stock}</div></div>
-   <div class="pj-pd-sold"><div class="pj-pd-stat-label">Terjual</div><div class="pj-pd-stat-value">${sold}</div></div>
- </div>
- <div class="pj-pd-stats">${locCards}</div>
- <div class="pj-pd-info">
-   <div class="pj-pd-info-title">Informasi Produk</div>
-   <div class="pj-pd-info-row"><span class="pj-pd-info-label">💰 Harga Modal / unit</span><span class="pj-pd-info-value">${modalText('Toko',p.modal)}</span></div>
-   <div class="pj-pd-info-row"><span class="pj-pd-info-label">📉 Stok Minimum</span><span class="pj-pd-info-value">${min}</span></div>
-   <div class="pj-pd-info-row"><span class="pj-pd-info-label">📊 Total Nilai Modal</span><span class="pj-pd-info-value">${modalText('Toko',modalValue)}</span></div>
+ <div class="pj-pd-stats">
+   <div class="pj-pd-col">${leftCol}</div>
+   <div class="pj-pd-col">${rightCol}</div>
  </div>
  <div class="pj-pd-actions"><button class="pj-pd-edit" onclick="openProduct('${p.id}')">Edit Produk</button><button class="pj-pd-close" onclick="closeM()">Tutup</button></div>`; modal.classList.add('show');
 }
@@ -4231,11 +4223,11 @@ if(!LOGIN_ENABLED){
 <button id="b-products" onclick="page('products')"><b aria-hidden="true" class="nav-icon"><svg viewbox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"></path><path d="m4 7.5 8 4.5 8-4.5M12 12v9M8 5.25l8 4.5"></path></svg></b>Produk</button>
 <button id="b-sales" onclick="page('sales')"><b aria-hidden="true" class="nav-icon"><svg viewbox="0 0 24 24"><path d="M6 3.5h9l4 4v13H6z"></path><path d="M15 3.5v5h4M9 12h6M9 15h4"></path><circle cx="16.5" cy="16.5" r="3.2"></circle><path d="M16.5 14.9v3.2M15.5 15.7c.3-.5 1.1-.7 1.6-.2.6.5.2 1.1-.5 1.3-.8.2-1.1.7-.6 1.2.5.5 1.3.3 1.6-.2"></path></svg></b>Transaksi</button>
 <button id="b-in" onclick="page('reports')"><b aria-hidden="true" class="nav-icon"><svg viewbox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19V3M22 19H2"></path></svg></b>Laporan</button>
-<button id="b-transfer" onclick="movement('transfer')"><b aria-hidden="true" class="nav-icon"><svg viewbox="0 0 24 24"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></b>Pengaturan</button>
+<button id="b-transfer" onclick="page('settings')"><b aria-hidden="true" class="nav-icon"><svg viewbox="0 0 24 24"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></b>Pengaturan</button>
 </div>
 <script id="pj-bottom-nav-active-v28-fix">
 (function(){
-  const map={home:'b-home',products:'b-products',sales:'b-sales',reports:'b-in'};
+  const map={home:'b-home',products:'b-products',sales:'b-sales',reports:'b-in',settings:'b-transfer'};
   function setActive(id){
     document.querySelectorAll('#bottomNav button').forEach(b=>b.classList.remove('active'));
     const el=document.getElementById(id); if(el) el.classList.add('active');
@@ -4839,7 +4831,7 @@ if(!LOGIN_ENABLED){
     db.activityLog=db.activityLog||[];
     db.activityLog.unshift({id:newId(),action:'Ambil Dana',details:`Jumlah: ${bosRupiah(jumlah)}${keterangan?' | Keterangan: '+keterangan:''}`,user:bosActor(),dateTime:now.iso});
     if(db.activityLog.length>2000) db.activityLog.length=2000;
-    try{ localStorage.setItem(KEY,JSON.stringify(db)); }catch(e){ db.setoranBos.shift(); db.activityLog.shift(); return alert('Ambil Dana gagal disimpan. Penyimpanan perangkat tidak tersedia.'); }
+    try{ save(); }catch(e){ db.setoranBos.shift(); db.activityLog.shift(); return alert('Ambil Dana gagal disimpan. Penyimpanan perangkat tidak tersedia.'); }
     closeM();
     toast('✓ Ambil Dana tersimpan');
     renderSetoranBos();
@@ -5017,7 +5009,7 @@ if(!LOGIN_ENABLED){
     db.activityLog=db.activityLog||[];
     db.activityLog.unshift({id:newId(),action:'Pengeluaran',details:`Jumlah: ${pengRupiah(jumlah)} | Keterangan: ${keterangan}`,user:pengActor(),dateTime:now.iso});
     if(db.activityLog.length>2000) db.activityLog.length=2000;
-    try{ localStorage.setItem(KEY,JSON.stringify(db)); }catch(e){ db.pengeluaran.shift(); db.activityLog.shift(); return alert('Pengeluaran gagal disimpan. Penyimpanan perangkat tidak tersedia.'); }
+    try{ save(); }catch(e){ db.pengeluaran.shift(); db.activityLog.shift(); return alert('Pengeluaran gagal disimpan. Penyimpanan perangkat tidak tersedia.'); }
     closeM();
     toast('✓ Pengeluaran tersimpan');
     if(document.getElementById('n-pengeluaran')?.classList.contains('active')) renderPengeluaran();
@@ -8326,18 +8318,28 @@ body:has(.pj-products-page) .pj-products-grid .product .actions button{
     if(!header)return;
     const wrap=header.querySelector(':scope > div');
     if(!wrap)return;
-    wrap.innerHTML=`
-      <div style="display:flex;align-items:center;gap:12px;min-width:0">
-        <img id="headerLogo" src="${PJ_LOGO_DATA_URI}" alt="Logo PUTRAJAYA">
-        <div style="min-width:0">
-          <h1 id="mainStoreTitle">PUTRAJAYA 2</h1>
-          <div class="sub">Stok • Modal • Laporan</div>
+    // PERBAIKAN BUG: setupHeader() dipanggil berkali-kali saat startup (DOMContentLoaded,
+    // requestAnimationFrame, window.load). Sebelumnya setiap panggilan membongkar ulang
+    // seluruh innerHTML header, termasuk tombol #userRole ("Akun"). Jika salah satu
+    // panggilan terlambat (mis. window.load menunggu script CDN) terjadi tepat saat user
+    // menekan tombol Akun, tombol lama dihancurkan sebelum event klik sempat terpicu —
+    // sehingga klik pertama terasa tidak merespons dan baru terbuka di klik berikutnya.
+    // Sekarang struktur header hanya dibangun SEKALI; panggilan berikutnya hanya
+    // memperbarui identitas/teks tanpa mengganti elemen tombolnya.
+    if(!wrap.querySelector('#userRole')){
+      wrap.innerHTML=`
+        <div style="display:flex;align-items:center;gap:12px;min-width:0">
+          <img id="headerLogo" src="${PJ_LOGO_DATA_URI}" alt="Logo PUTRAJAYA">
+          <div style="min-width:0">
+            <h1 id="mainStoreTitle">PUTRAJAYA 2</h1>
+            <div class="sub">Stok • Modal • Laporan</div>
+          </div>
         </div>
-      </div>
-      <div class="userbar">
-        <button class="pj-notif-bell role-sensitive" id="notifBellBtn" onclick="openNotifPanel()" title="Pesan Masuk" type="button"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="pj-notif-badge" id="notifBadge" style="display:none"></span></button>
-        <button id="userRole" class="role" type="button" onclick="page('akunSaya')" title="Akun"></button>
-      </div>`;
+        <div class="userbar">
+          <button class="pj-notif-bell role-sensitive" id="notifBellBtn" onclick="openNotifPanel()" title="Pesan Masuk" type="button"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="pj-notif-badge" id="notifBadge" style="display:none"></span></button>
+          <button id="userRole" class="role" type="button" onclick="page('akunSaya')" title="Akun"></button>
+        </div>`;
+    }
     // setupHeader dapat dipanggil ulang setelah login/app dimuat. Isi ulang identitas
     // di sini agar render header tidak mengosongkan nama pengguna.
     const roleEl=document.getElementById('userRole');
@@ -8356,6 +8358,15 @@ body:has(.pj-products-page) .pj-products-grid .product .actions button{
   function setupBottomNav(){
     const nav=document.getElementById('bottomNav');
     if(!nav)return;
+    // PERBAIKAN BUG: sama seperti setupHeader(), fungsi ini dipanggil berkali-kali
+    // saat startup (DOMContentLoaded, requestAnimationFrame, window.load). Sebelumnya
+    // setiap panggilan membongkar ulang ISI tombol nav bawah (ikon svg + label) lewat
+    // innerHTML — padahal ikon/label itu justru yang disentuh jari user. Kalau salah
+    // satu panggilan telat (mis. window.load nunggu script CDN) terjadi tepat saat user
+    // menekan tombol (misal "Produk"), elemen yang disentuh keburu dihancurkan sebelum
+    // event klik sempat terpicu — tombol jadi terasa berat/tidak responsif, harus ditekan
+    // ulang. Sekarang isi tombol hanya dibangun SEKALI (ditandai data-pj-nav-ready).
+    if(nav.dataset.pjNavReady==='1')return;
     const buttons=nav.querySelectorAll('button');
     if(buttons.length>=5){
       buttons[0].innerHTML='<b class="nav-icon nav-home" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-5v-6h-5v6h-5A1.5 1.5 0 0 1 3 19.5z"/></svg></b><span class="nav-label">Beranda</span>';
@@ -8364,6 +8375,7 @@ body:has(.pj-products-page) .pj-products-grid .product .actions button{
       buttons[3].innerHTML='<b class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19V3M22 19H2"/></svg></b><span class="nav-label">Laporan</span>';
       buttons[4].innerHTML='<b class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></b><span class="nav-label">Pengaturan</span>';
       buttons[4].onclick=function(e){e.preventDefault();toggleMenu(e);};
+      nav.dataset.pjNavReady='1';
     }
   }
 
@@ -11030,3 +11042,66 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
   });
 })();
 </script>
+
+<script id="pj-header-app-sync-real-v3">
+/* FIX ASLI garis putih di bawah header (v3 — juga saat SCROLL).
+   v2 kemarin sudah menyamakan #app & #modal ke tinggi header asli, tapi
+   cuma dihitung ulang saat halaman dibuka/di-resize/diputar. Ternyata di
+   Chrome Android, address bar browser mengecil/membesar SAAT SCROLL, yang
+   diam-diam mengubah tinggi layar sesaat — jadi posisi #app/#modal sempat
+   meleset lagi selama scroll berlangsung, muncul garis tipis dari halaman
+   di baliknya. Sekarang perhitungan ulang juga jalan mengikuti perubahan
+   tinggi layar itu (window.visualViewport) dan saat scroll, dibatasi
+   dengan requestAnimationFrame supaya tetap ringan. Tidak mengubah
+   data/fungsi apa pun. */
+(function(){
+  var scheduled=false;
+  function syncHeaderHeight(){
+    var h=document.querySelector('header');
+    var app=document.getElementById('app');
+    var modal=document.getElementById('modal');
+    if(!h)return;
+    var hh=Math.round(h.getBoundingClientRect().height);
+    if(hh<=0)return;
+    if(app)app.style.setProperty('top', hh+'px', 'important');
+    if(modal)modal.style.setProperty('top', (hh+4)+'px', 'important');
+  }
+  function scheduleSync(){
+    if(scheduled)return;
+    scheduled=true;
+    requestAnimationFrame(function(){ scheduled=false; syncHeaderHeight(); });
+  }
+  syncHeaderHeight();
+  window.addEventListener('resize', scheduleSync);
+  window.addEventListener('orientationchange', scheduleSync);
+  window.addEventListener('scroll', scheduleSync, {passive:true, capture:true});
+  document.addEventListener('touchmove', scheduleSync, {passive:true});
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', scheduleSync);
+    window.visualViewport.addEventListener('scroll', scheduleSync);
+  }
+  if(window.ResizeObserver){
+    var header=document.querySelector('header');
+    if(header){ new ResizeObserver(scheduleSync).observe(header); }
+  }
+  document.addEventListener('DOMContentLoaded', syncHeaderHeight);
+})();
+</script>
+
+<style id="pj-product-detail-photo-scroll-glitch-fix-v1">
+/* FIX: di Detail Produk, kotak foto (bulat sudutnya, overflow:hidden) kelihatan
+   "diam" saat scroll sedangkan fotonya sendiri jalan duluan, dan muncul garis
+   ngambang di tepi atas foto. Ini bug rendering khas WebKit/iOS: elemen dengan
+   border-radius + overflow:hidden yang ada di dalam area yang di-scroll pakai
+   -webkit-overflow-scrolling:touch kadang gagal digambar ulang (repaint) pas
+   layar digeser, jadi kelihatan "kepisah" dari isinya sesaat.
+   Perbaikan standar: paksa kotak foto ini punya lapisan render sendiri
+   (compositing layer) supaya WebKit selalu menggambar ulang dengan benar. */
+.pj-pd-photo-wrap{
+  -webkit-mask-image:-webkit-radial-gradient(white,black);
+  transform:translateZ(0);
+  -webkit-transform:translateZ(0);
+  -webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
+}
+</style>
