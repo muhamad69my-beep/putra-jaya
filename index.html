@@ -5528,6 +5528,7 @@ if(!LOGIN_ENABLED){
             <b>Dana</b>
             <div class="pj-sum-label">UANG DI TOKO</div>
             <div class="pj-sum-value pj-toggle-value" id="txnDanaAmount">Rp 0</div>
+            <div id="txnDanaBreakdown" style="font-size:10px;color:#718096;margin-top:6px;line-height:1.7"></div>
           </div>
           <div class="pj-sum-actions">
             <button type="button" class="pj-sum-btn" id="txnDanaViewBtn" style="background:#B3E7CF !important;color:#14284B !important">Ambil</button>
@@ -5612,10 +5613,16 @@ if(!LOGIN_ENABLED){
     // Rumus sama dengan yang dipakai halaman Dana asli: penjualan tunai dikurangi setoran ke bos.
     function refreshTxnDana(){
       const el=document.getElementById('txnDanaAmount'); if(!el)return;
-      const cashSales=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0);
+      const cashSalesAktif=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0);
+      const arsipTunai=Number(db.salesTunaiArsipTotal)||0;
+      const cashSales=cashSalesAktif+arsipTunai;
       const setoran=(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
-      const pengeluaran=(db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)+(Number(db.pengeluaranArsipTotal)||0);
+      const pengeluaranAktif=(db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
+      const arsipPengeluaran=Number(db.pengeluaranArsipTotal)||0;
+      const pengeluaran=pengeluaranAktif+arsipPengeluaran;
       el.textContent=moneyV(Math.max(0,cashSales-setoran-pengeluaran));
+      const bd=document.getElementById('txnDanaBreakdown');
+      if(bd)bd.innerHTML=`Jual Tunai: ${moneyV(cashSales)} (arsip: ${moneyV(arsipTunai)})<br>Diambil/Setor: ${moneyV(setoran)}<br>Pengeluaran: ${moneyV(pengeluaran)} (arsip: ${moneyV(arsipPengeluaran)})`;
     }
     refreshTxnDana();
     document.getElementById('txnDanaViewBtn').onclick=()=>page('setoranBos');
