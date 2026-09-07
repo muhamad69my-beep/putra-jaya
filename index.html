@@ -1739,6 +1739,11 @@ db.payments=db.payments||{};
 if(!Array.isArray(db.shoppingNotes))db.shoppingNotes=[];
 if(!Array.isArray(db.activityLog))db.activityLog=[];
 if(!db.settings || typeof db.settings!=='object')db.settings={};
+/* pj-fix-kastoko-tunai-hilang-v1: normalisasi data lama yang sudah kadung tersimpan
+   dengan payment:'-' (akibat bug sinkronisasi lama) supaya langsung ikut terhitung
+   sebagai TUNAI di Kas Toko/Dana/Uang di Toko/Pengeluaran, tanpa menunggu transaksi
+   baru. Hanya menormalkan label pembayaran, tidak mengubah nilai/omzet/stok apa pun. */
+if(Array.isArray(db.moves)){let __pjPaymentFixed=false;db.moves.forEach(m=>{if(m&&m.type==='Penjualan Toko'&&(m.payment===''||m.payment==null||m.payment==='-')){m.payment='TUNAI';__pjPaymentFixed=true;}});if(__pjPaymentFixed){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}}}
 function applyStoreNameToHeader(){
   const el=document.getElementById('mainStoreTitle');
   const name=(db.settings&&db.settings.store&&db.settings.store.name)?String(db.settings.store.name).trim():'';
@@ -1863,7 +1868,18 @@ function productToRemote(p){return {id:p.id,nama:p.nama,kode:p.kode,kategori:p.k
 function moveToRemote(x){return {id:x.id,no:x.no||null,type:x.type,product_id:isUUID(x.productId)?x.productId:null,product:x.product,qty:+x.qty||0,date:x.date,note:x.note||null,loc:x.loc||null,unit_price:+x.unitPrice||0,discount:+x.discount||0,total:+x.total||0,laba:+x.laba||0,modal_total:+x.modalTotal||0,username:x.user||null,payment:x.payment||null,payment_amount:+x.paymentAmount||0,cancelled:!!x.cancelled,cancelled_at:x.cancelledAt||null,cancelled_by:x.cancelledBy||null,correction_of:x.correctionOf||null};}
 // --- PEMULIHAN DATA DARI CLOUD (tarik balik dari Supabase ke HP) ---
 function productFromRemote(r){return {id:r.id,nama:r.nama,kode:r.kode,kategori:r.kategori||'',modal:+r.modal||0,min:+r.min_stock||0,stokT:+r.stok_toko||0,stokG1:+r.stok_g1||0,stokG2:+r.stok_g2||0,stokG3:+r.stok_g3||0,stokG4:+r.stok_g4||0,foto:r.foto||''};}
-function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.product_id,product:r.product,qty:+r.qty||0,date:r.date,note:r.note||'',loc:r.loc||'',unitPrice:+r.unit_price||0,discount:+r.discount||0,total:+r.total||0,laba:+r.laba||0,modalTotal:+r.modal_total||0,user:r.username||'-',payment:r.payment||'-',paymentAmount:+r.payment_amount||0,cancelled:!!r.cancelled,cancelledAt:r.cancelled_at||null,cancelledBy:r.cancelled_by||null,correctionOf:r.correction_of||null};}
+function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.product_id,product:r.product,qty:+r.qty||0,date:r.date,note:r.note||'',loc:r.loc||'',unitPrice:+r.unit_price||0,discount:+r.discount||0,total:+r.total||0,laba:+r.laba||0,modalTotal:+r.modal_total||0,user:r.username||'-',payment:r.payment||'TUNAI',paymentAmount:+r.payment_amount||0,cancelled:!!r.cancelled,cancelledAt:r.cancelled_at||null,cancelledBy:r.cancelled_by||null,correctionOf:r.correction_of||null};}
+/* pj-fix-kastoko-tunai-hilang-v1: AKAR MASALAH ditemukan di sini — dulu kalau kolom
+   payment dari server kosong/null, transaksi diberi payment:'-' (bukan 'TUNAI').
+   Karena semua rumus Kas Toko/Dana/Uang di Toko/Pengeluaran mencocokkan payment
+   secara ketat ke 'TUNAI', transaksi berlabel '-' itu jadi tidak terhitung sama
+   sekali di kas, walau tetap muncul di Omzet/Total Penjualan (rumus Omzet lebih
+   longgar). Sekarang default-nya 'TUNAI' (sesuai metode pembayaran default di
+   seluruh form penjualan), dan sebagai jaring pengaman tambahan, semua rumus kas
+   di bawah ini memakai isTunaiSale() yang menganggap SEMUA penjualan sebagai
+   tunai KECUALI yang eksplisit ditandai TRANSFER — supaya data lama yang sudah
+   kadung tersimpan payment:'-' pun tetap terhitung benar tanpa perlu diperbaiki manual. */
+function isTunaiSale(x){const m=String(x&&x.payment||'').toUpperCase().trim();return m!=='TRANSFER'&&m!=='PIUTANG';}
 // --- SINKRON DATA LAINNYA (Riwayat Aktivitas, Kategori, Hutang, Pengeluaran,
 // Catatan Belanja, Setoran, Pengaturan, dll) — disimpan sebagai satu baris JSON
 // per jenis data di tabel putrajaya_appdata, supaya semua fitur ikut 2 arah. ---
@@ -2019,10 +2035,30 @@ function lastOnlineSyncText(){
 // Menggabungkan data cloud ke data lokal berdasarkan ID unik masing-masing,
 // bukan menimpa semua data lokal — jadi data yang belum sempat ke-sync
 // dari HP ini tidak hilang.
+/* pj-fix-notif-terbaca-kembali-lagi-v1: AKAR MASALAH notifikasi "sudah dibaca"
+   balik jadi "belum dibaca" lagi ada di sini. Dulu kalau ID yang sama ada di
+   data lokal MAUPUN di server, data SERVER selalu menang — walau data lokal
+   itu baru saja diubah (misal notifikasi baru ditandai read:true) dan belum
+   sempat terkirim ke server saat proses gabung ini berjalan. Akibatnya
+   perubahan lokal langsung tertimpa balik oleh salinan lama dari server,
+   dalam satu proses save() yang sama, sebelum sempat kelihatan oleh pengguna.
+   Sekarang, kalau kedua sisi (lokal & server) sama-sama punya field
+   updatedAt, yang paling BARU diubah yang dipakai — bukan otomatis server.
+   Kalau salah satu/kedua sisi belum punya updatedAt (jenis data lama yang
+   belum diberi stempel waktu), perilaku lama tetap dipertahankan (server
+   menang) supaya tidak mengubah perilaku fitur lain yang belum disentuh. */
 function pjMergeById(localArr,remoteArr,idField){
   const map=new Map();
   (Array.isArray(localArr)?localArr:[]).forEach(x=>{if(x&&x[idField]!=null)map.set(String(x[idField]),x)});
-  (Array.isArray(remoteArr)?remoteArr:[]).forEach(x=>{if(x&&x[idField]!=null)map.set(String(x[idField]),x)});
+  (Array.isArray(remoteArr)?remoteArr:[]).forEach(x=>{
+    if(!x||x[idField]==null)return;
+    const key=String(x[idField]);
+    const existing=map.get(key);
+    if(existing && existing.updatedAt && x.updatedAt && new Date(existing.updatedAt).getTime()>new Date(x.updatedAt).getTime()){
+      return; // data lokal lebih baru diubah daripada data server, jangan ditimpa.
+    }
+    map.set(key,x);
+  });
   return Array.from(map.values());
 }
 function pjMergeStrings(localArr,remoteArr){
@@ -2111,7 +2147,8 @@ function pushSaleNotification(items){
     date:first.date,
     time:now.toTimeString().slice(0,5),
     dateTime:now.toISOString(),
-    read:false
+    read:false,
+    updatedAt:now.toISOString()
   });
   if(db.notifications.length>50)db.notifications.length=50;
   try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){console.warn('Gagal menyimpan notifikasi',e)}
@@ -2151,7 +2188,7 @@ function openNotifDetail(notifId){
   db.notifications=db.notifications||[];
   const n=db.notifications.find(x=>x.id===notifId);
   if(!n)return;
-  if(!n.read){n.read=true;save();updateNotifBadge();renderNotifList();}
+  if(!n.read){n.read=true;n.updatedAt=new Date().toISOString();save();updateNotifBadge();renderNotifList();}
 
   // Tampilan Pesan Masuk SELALU pakai format tabel ringkas ini (sesuai desain
   // yang diminta), tidak lagi dialihkan ke tampilan kartu per-field.
@@ -2911,7 +2948,7 @@ function refreshProfessionalHome(){
     Ambil Dana / Pengeluaran. Sekarang dipakai cashHeld() yang sama —
     satu sumber angka untuk semua halaman, tidak ada lagi selisih. */
  const kasTokoValue=(typeof window.cashHeld==='function')?window.cashHeld():Math.max(0,
-   (db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0)
+   (db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&isTunaiSale(x)).reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0)
    -(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)
    -((db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)+(Number(db.pengeluaranArsipTotal)||0))
  );
@@ -4080,7 +4117,7 @@ if(!LOGIN_ENABLED){
   window.renderHistory=function(){let list=db.moves||[];app.innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Laporan Transaksi</h2><button type="button" class="gray" onclick="page('activity')">Buka Laporan Aktivitas ›</button></div><div class="toolbar"><input id="hq" placeholder="Cari transaksi..." oninput="historyCards()"><button onclick="clearHistory()" class="danger">Hapus Riwayat</button></div><div class="tablewrap pj-txn-tablewrap"><table class="table pj-txn-table"><thead><tr><th>No.</th><th>Tanggal</th><th>Jenis</th><th>Barang</th><th>Qty</th><th>Lokasi</th><th>Nilai Modal</th><th>Omzet</th><th>Laba</th><th>Aksi</th></tr></thead><tbody id="hist"></tbody></table></div></div>`;historyCards()};
   window.historyCards=function(){let q=(document.getElementById('hq')?.value||'').toLowerCase();let l=(db.moves||[]).filter(x=>(String(x.product)+' '+String(x.type)+' '+String(x.note)+' '+String(x.loc)+' '+String(x.no||'')).toLowerCase().includes(q));const el=document.getElementById('hist');if(el)el.innerHTML=l.length?l.map(x=>`<tr><td>${esc(x.no||'-')}</td><td>${x.date}</td><td><span class="pill">${esc(x.type)}</span></td><td>${esc(x.product)}</td><td>${x.qty}</td><td>${esc(locLabel(x.loc))}</td><td>${x.modalTotal?modalText(modalScope(x.loc),x.modalTotal):'-'}</td><td>${x.type==='Penjualan Toko'&&!x.cancelled?rupiah(x.total):'-'}</td><td>${x.type==='Penjualan Toko'&&!x.cancelled?rupiah(x.laba):'-'}</td><td><button class="smallbtn danger" onclick="deleteTransaction('${x.id}')">Hapus</button></td></tr>`).join(''):'<tr><td colspan="10" class="empty">Belum ada transaksi.</td></tr>'};
   window.deleteTransaction=function(id){if(!hasPermission('Hapus Transaksi')){alert('Anda tidak memiliki izin menghapus transaksi.');return}const m=db.moves.find(x=>String(x.id)===String(id));if(!m)return;if(!confirm('⚠️ Yakin ingin menghapus transaksi ini?'))return;pjRemoteDelete('putrajaya_moves',m.id);db.moves=db.moves.filter(x=>String(x.id)!==String(id));logActivity('Hapus Transaksi',(m.no||m.id||'')+' '+(m.product||''));save();renderHistory();toast('✓ Transaksi dihapus')};
-  window.clearHistory=function(){if(!requireAdmin())return;if(confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Log aktivitas tetap dipertahankan. Tindakan ini tidak bisa dibatalkan.')){const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;pjRemoteDeleteAll('putrajaya_moves');db.moves=[];safeLog('Hapus Riwayat Transaksi','Semua transaksi dihapus, saldo kas & stok tetap aman, log aktivitas dipertahankan');save();renderHistory();if(typeof window.cashHeld==='function')window.cashHeld();toast('✓ Riwayat transaksi dikosongkan, saldo kas & stok tidak berubah')}};
+  window.clearHistory=function(){if(!requireAdmin())return;if(confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Log aktivitas tetap dipertahankan. Tindakan ini tidak bisa dibatalkan.')){const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&isTunaiSale(x)).reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;pjRemoteDeleteAll('putrajaya_moves');db.moves=[];safeLog('Hapus Riwayat Transaksi','Semua transaksi dihapus, saldo kas & stok tetap aman, log aktivitas dipertahankan');save();renderHistory();if(typeof window.cashHeld==='function')window.cashHeld();toast('✓ Riwayat transaksi dikosongkan, saldo kas & stok tidak berubah')}};
   // Safer backup/restore: include users, settings, counters, notes, photos and activity log.
   window.renderBackup=function(){if(!requireAdmin())return;app.innerHTML=`<div class="card"><h2>Backup & Restore</h2><p class="muted">Backup mencakup seluruh data aplikasi: katalog, stok, transaksi, foto, akun, hak akses, Catatan Belanja, pengaturan, nomor transaksi, dan Riwayat Aktivitas.</p><div class="actions"><button onclick="backup()">Download Backup Lengkap</button><button class="success" onclick="document.getElementById('restoreFile').click()">↻ Pulihkan Data (Restore)</button><input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restore(event)"></div><div class="muted" style="margin-top:6px">Pilih file backup (.json) yang pernah diunduh untuk memulihkan data.</div><hr><button class="danger" onclick="resetAll()">Reset Semua Data</button></div><div class="card" style="margin-top:10px"><h2>Backup Online</h2><p class="muted">Data barang &amp; transaksi otomatis tersinkron ke server online setiap ada perubahan, dan disinkron ulang otomatis setiap 5 menit selama HP terhubung internet.</p><div class="card" id="onlineSyncStatus" style="background:#f7f9fc;border:1px solid #dce5f2">${navigator.onLine?'🟢 Online':'🔴 Offline'} · <span id="onlineSyncTime">${lastOnlineSyncText()}</span></div><div class="actions" style="margin-top:10px"><button class="success" onclick="manualSyncOnline()">Backup Online Sekarang</button></div></div><div class="card" style="margin-top:10px"><h2>Diagnostik Sinkron</h2><p class="muted">Cek langsung ke server Supabase: berapa data yang benar-benar tersimpan online, dan apakah ada bagian yang belum tersinkron.</p><div class="actions"><button onclick="runSupabaseDiagnostic()">Jalankan Diagnostik</button></div><div id="pjDiagResult" style="margin-top:10px"></div></div>${renderStorageUsageCard()}`;setTimeout(()=>{if(window.refreshStorageUsage)refreshStorageUsage();},0);};
   window.runSupabaseDiagnostic=async function(){
@@ -4782,7 +4819,7 @@ if(!LOGIN_ENABLED){
   ensureSetoranBos();
 
   function cashSalesTotal(){
-    return (db.moves||[]).filter(x=>x && x.type==='Penjualan Toko'&&!x.cancelled && String(x.payment||'').toUpperCase()==='TUNAI')
+    return (db.moves||[]).filter(x=>x && x.type==='Penjualan Toko'&&!x.cancelled && isTunaiSale(x))
       .reduce((sum,x)=>sum+(Number(x.paymentAmount ?? x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0);
   }
   function transferSalesTotal(){
@@ -4927,7 +4964,7 @@ if(!LOGIN_ENABLED){
   ensurePengeluaran();
 
   function cashSalesTotal(){
-    return (db.moves||[]).filter(x=>x && x.type==='Penjualan Toko'&&!x.cancelled && String(x.payment||'').toUpperCase()==='TUNAI')
+    return (db.moves||[]).filter(x=>x && x.type==='Penjualan Toko'&&!x.cancelled && isTunaiSale(x))
       .reduce((sum,x)=>sum+(Number(x.paymentAmount ?? x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0);
   }
   function setoranTotal(){ return (db.setoranBos||[]).reduce((sum,x)=>sum+(Number(x.jumlah)||0),0); }
@@ -5613,7 +5650,7 @@ if(!LOGIN_ENABLED){
     // Rumus sama dengan yang dipakai halaman Dana asli: penjualan tunai dikurangi setoran ke bos.
     function refreshTxnDana(){
       const el=document.getElementById('txnDanaAmount'); if(!el)return;
-      const cashSalesAktif=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0);
+      const cashSalesAktif=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&isTunaiSale(x)).reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0);
       const arsipTunai=Number(db.salesTunaiArsipTotal)||0;
       const cashSales=cashSalesAktif+arsipTunai;
       const setoran=(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
@@ -6953,7 +6990,7 @@ if(!LOGIN_ENABLED){
     // penjualan tunai & pengeluaran lama, sekarang pakai cashHeld() yang
     // sama persis dengan Beranda supaya angkanya benar-benar cocok.
     const kasTokoRealtime=(typeof window.cashHeld==='function')?window.cashHeld():Math.max(0,
-      (db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0)
+      (db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&isTunaiSale(x)).reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0)+(Number(db.salesTunaiArsipTotal)||0)
       -(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)
       -((db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)+(Number(db.pengeluaranArsipTotal)||0))
     );
@@ -10899,7 +10936,7 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
     const removed=(db.moves||[]).filter(x=>x.type==='Penjualan Toko');
     if(!removed.length){alert('Belum ada riwayat penjualan.');return}
     if(!confirm('⚠️ Yakin ingin menghapus SEMUA riwayat penjualan? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Tindakan ini tidak bisa dibatalkan.'))return;
-    const tunaiDihapus=removed.filter(x=>x&&!x.cancelled&&String(x.payment||'').toUpperCase()==='TUNAI').reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);
+    const tunaiDihapus=removed.filter(x=>x&&!x.cancelled&&isTunaiSale(x)).reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);
     db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;
     db.moves=(db.moves||[]).filter(x=>x.type!=='Penjualan Toko');
     await pjRemoteDeleteMany('putrajaya_moves',removed.map(x=>x.id));
