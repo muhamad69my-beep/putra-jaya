@@ -34,12 +34,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: 'gradle'
 
       - name: Install dependencies
         run: npm install
@@ -56,6 +58,18 @@ jobs:
 
       - name: Add Android platform
         run: npx cap add android
+
+      - name: Prepare icon source
+        shell: bash
+        run: |
+          mkdir -p resources
+          cp icon-512.png resources/icon.png
+
+      - name: Install capacitor-assets
+        run: npm install @capacitor/assets --save-dev
+
+      - name: Generate app icons
+        run: npx capacitor-assets generate --android
 
       - name: Sync Capacitor
         run: npx cap sync android
