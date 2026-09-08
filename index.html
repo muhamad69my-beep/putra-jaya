@@ -4180,11 +4180,8 @@ const EMPLOYEE_PERMISSION_ITEMS=[
   ['Navigasi Pengaturan',['NAV Lainnya','Pengaturan']],
   ['Hapus Produk',['Hapus Produk']],
   ['Edit Produk',['Edit Produk']],
-  ['Sales',['Penjualan']],
-  ['Pengeluaran',['Lihat Uang Keluar','Tambah/Edit Uang Keluar','Hapus Uang Keluar']],
   ['Dana',['Dana']],
-  ['Penjualan',['Penjualan Toko']],
-  ['Restoran',['Restoran']]
+  ['Navigasi Transaksi',['NAV Transaksi']]
 ];
 function ensureNavPermissions(u){
   u.permissions={...DEFAULT_PERMISSIONS(),...(u.permissions||{})};
@@ -5854,7 +5851,7 @@ if(!LOGIN_ENABLED){
       const cashSalesAktif=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&isTunaiSale(x)).reduce((a,x)=>a+(Number(x.paymentAmount??x.total)||0),0);
       const arsipTunai=Number(db.salesTunaiArsipTotal)||0;
       const cashSales=cashSalesAktif+arsipTunai;
-      const setoran=(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
+      const setoran=(db.setoranBos||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0)+(Number(db.setoranArsipTotal)||0);
       const pengeluaranAktif=(db.pengeluaran||[]).reduce((a,x)=>a+(Number(x.jumlah)||0),0);
       const arsipPengeluaran=Number(db.pengeluaranArsipTotal)||0;
       const pengeluaran=pengeluaranAktif+arsipPengeluaran;
