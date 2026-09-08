@@ -1772,6 +1772,7 @@ function stockAt(p,loc){
 }
 function setStockAt(p,loc,val){
   p[locSlotField(loc)]=val;
+  p.updatedAt=new Date().toISOString();
 }
 function totalStockOf(p){return LOCATION_NAMES.reduce((a,l)=>a+stockAt(p,l),0)}
 function productStockLineBold(p){return LOCATION_NAMES.map(l=>locLabel(l)+': <b>'+stockAt(p,l)+'</b>').join(' · ');}
@@ -1800,7 +1801,15 @@ function pjApplyRealtimeChange(tableName,payload){
       if(key==='employeesUsers'){ if(evt!=='DELETE'&&newRow)applyRemoteEmployeesUsers(newRow.value); return; }
       if(!key||!PJ_MISC_KEYS.includes(key))return;
       if(evt==='DELETE'){/* penghapusan baris appdata jarang terjadi, diabaikan */}
-      else{db[key]=newRow.value;}
+      else{
+        db[key]=newRow.value;
+        // pj-fix-hapus-tombstone-v1: begitu daftar tombstone diperbarui HP lain
+        // dan tersiar lewat realtime, langsung terapkan — barang/transaksi
+        // yang baru dihapus hilang seketika di HP ini juga, tanpa reload.
+        if(key==='deletedProductIds'||key==='deletedMoveIds')pjApplyTombstones();
+        // pj-fix-hapus-tombstone-v2: sama, untuk kuburan data lain.
+        if(key==='miscTombstones')pjApplyMiscTombstones();
+      }
     }
     localStorage.setItem(KEY,JSON.stringify(db));
     if(typeof pjRefreshCurrentView==='function')pjRefreshCurrentView();
@@ -1864,11 +1873,26 @@ async function pjForceSyncKey(key){
     await apiUpsert('putrajaya_appdata',[{key:key,value:value,updated_at:new Date().toISOString()}],'key');
   }catch(e){console.warn('Gagal memaksa sinkron '+key,e);}
 }
-function productToRemote(p){return {id:p.id,nama:p.nama,kode:p.kode,kategori:p.kategori||null,modal:+p.modal||0,min_stock:+p.min||0,stok_toko:+p.stokT||0,stok_g1:+p.stokG1||0,stok_g2:+p.stokG2||0,stok_g3:+p.stokG3||0,stok_g4:+p.stokG4||0,foto:p.foto||null};}
-function moveToRemote(x){return {id:x.id,no:x.no||null,type:x.type,product_id:isUUID(x.productId)?x.productId:null,product:x.product,qty:+x.qty||0,date:x.date,note:x.note||null,loc:x.loc||null,unit_price:+x.unitPrice||0,discount:+x.discount||0,total:+x.total||0,laba:+x.laba||0,modal_total:+x.modalTotal||0,username:x.user||null,payment:x.payment||null,payment_amount:+x.paymentAmount||0,cancelled:!!x.cancelled,cancelled_at:x.cancelledAt||null,cancelled_by:x.cancelledBy||null,correction_of:x.correctionOf||null};}
+// pj-fix-hapus-tombstone-v1: dorong 1 ID baru ke daftar tombstone (barang/transaksi
+// terhapus) ke server SEGERA setelah hapus, TAPI digabung dulu dengan daftar
+// tombstone server (bukan langsung timpa) — supaya ID yang baru ditambahkan HP
+// lain (belum sempat ditarik ke HP ini) tidak ikut terhapus balik oleh proses ini.
+async function pjPushTombstone(key){
+  if(!navigator.onLine)return;
+  try{
+    let remote=[];
+    try{const rows=await apiGet('putrajaya_appdata','select=value&key=eq.'+encodeURIComponent(key));if(rows.length&&Array.isArray(rows[0].value))remote=rows[0].value;}catch(e){}
+    const merged=pjMergeById(db[key],remote,'id');
+    db[key]=merged;
+    localStorage.setItem(KEY,JSON.stringify(db));
+    await apiUpsert('putrajaya_appdata',[{key:key,value:merged,updated_at:new Date().toISOString()}],'key');
+  }catch(e){console.warn('Gagal mendorong tombstone '+key,e);}
+}
+function productToRemote(p){return {id:p.id,nama:p.nama,kode:p.kode,kategori:p.kategori||null,modal:+p.modal||0,min_stock:+p.min||0,stok_toko:+p.stokT||0,stok_g1:+p.stokG1||0,stok_g2:+p.stokG2||0,stok_g3:+p.stokG3||0,stok_g4:+p.stokG4||0,foto:p.foto||null,updated_at:p.updatedAt||new Date().toISOString()};}
+function moveToRemote(x){return {id:x.id,no:x.no||null,type:x.type,product_id:isUUID(x.productId)?x.productId:null,product:x.product,qty:+x.qty||0,date:x.date,note:x.note||null,loc:x.loc||null,unit_price:+x.unitPrice||0,discount:+x.discount||0,total:+x.total||0,laba:+x.laba||0,modal_total:+x.modalTotal||0,username:x.user||null,payment:x.payment||null,payment_amount:+x.paymentAmount||0,cancelled:!!x.cancelled,cancelled_at:x.cancelledAt||null,cancelled_by:x.cancelledBy||null,correction_of:x.correctionOf||null,updated_at:x.updatedAt||new Date().toISOString()};}
 // --- PEMULIHAN DATA DARI CLOUD (tarik balik dari Supabase ke HP) ---
-function productFromRemote(r){return {id:r.id,nama:r.nama,kode:r.kode,kategori:r.kategori||'',modal:+r.modal||0,min:+r.min_stock||0,stokT:+r.stok_toko||0,stokG1:+r.stok_g1||0,stokG2:+r.stok_g2||0,stokG3:+r.stok_g3||0,stokG4:+r.stok_g4||0,foto:r.foto||''};}
-function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.product_id,product:r.product,qty:+r.qty||0,date:r.date,note:r.note||'',loc:r.loc||'',unitPrice:+r.unit_price||0,discount:+r.discount||0,total:+r.total||0,laba:+r.laba||0,modalTotal:+r.modal_total||0,user:r.username||'-',payment:r.payment||'TUNAI',paymentAmount:+r.payment_amount||0,cancelled:!!r.cancelled,cancelledAt:r.cancelled_at||null,cancelledBy:r.cancelled_by||null,correctionOf:r.correction_of||null};}
+function productFromRemote(r){return {id:r.id,nama:r.nama,kode:r.kode,kategori:r.kategori||'',modal:+r.modal||0,min:+r.min_stock||0,stokT:+r.stok_toko||0,stokG1:+r.stok_g1||0,stokG2:+r.stok_g2||0,stokG3:+r.stok_g3||0,stokG4:+r.stok_g4||0,foto:r.foto||'',updatedAt:r.updated_at||null};}
+function moveFromRemote(r){return {id:r.id,no:r.no||'-',type:r.type,productId:r.product_id,product:r.product,qty:+r.qty||0,date:r.date,note:r.note||'',loc:r.loc||'',unitPrice:+r.unit_price||0,discount:+r.discount||0,total:+r.total||0,laba:+r.laba||0,modalTotal:+r.modal_total||0,user:r.username||'-',payment:r.payment||'TUNAI',paymentAmount:+r.payment_amount||0,cancelled:!!r.cancelled,cancelledAt:r.cancelled_at||null,cancelledBy:r.cancelled_by||null,correctionOf:r.correction_of||null,updatedAt:r.updated_at||null};}
 /* pj-fix-kastoko-tunai-hilang-v1: AKAR MASALAH ditemukan di sini — dulu kalau kolom
    payment dari server kosong/null, transaksi diberi payment:'-' (bukan 'TUNAI').
    Karena semua rumus Kas Toko/Dana/Uang di Toko/Pengeluaran mencocokkan payment
@@ -1883,7 +1907,7 @@ function isTunaiSale(x){const m=String(x&&x.payment||'').toUpperCase().trim();re
 // --- SINKRON DATA LAINNYA (Riwayat Aktivitas, Kategori, Hutang, Pengeluaran,
 // Catatan Belanja, Setoran, Pengaturan, dll) — disimpan sebagai satu baris JSON
 // per jenis data di tabel putrajaya_appdata, supaya semua fitur ikut 2 arah. ---
-const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings','employeesUsers','cashOuts'];
+const PJ_MISC_KEYS=['activityLog','categories','customerDebts','supplierDebts','deletedDebtHistory','dayClosings','notifications','payments','pengeluaran','pengeluaranArsipTotal','setoranBos','setoranArsipTotal','salesTunaiArsipTotal','shoppingNotes','settings','employeesUsers','cashOuts','deletedProductIds','deletedMoveIds','miscTombstones'];
 async function syncMiscOnline(){
   if(!navigator.onLine)return;
   // PATCH: sebelum kirim data lain (Riwayat Aktivitas, Notifikasi, Pengeluaran,
@@ -1900,6 +1924,11 @@ async function syncMiscOnline(){
     if(remoteMap.dayClosings!=null)db.dayClosings=pjMergeById(db.dayClosings,remoteMap.dayClosings,'tanggal');
     if(remoteMap.payments!=null)db.payments=Object.assign({},remoteMap.payments||{},db.payments||{});
     if(remoteMap.settings!=null)db.settings=Object.assign({},remoteMap.settings||{},db.settings||{});
+    // pj-fix-hapus-tombstone-v2: gabungkan kuburan data lain (union), lalu
+    // terapkan SEBELUM kirim balik ke server — supaya item yang sudah
+    // dihapus di HP mana pun tidak ikut terkirim ulang di sini.
+    if(remoteMap.miscTombstones!=null)pjMergeMiscTombstones(remoteMap.miscTombstones);
+    pjApplyMiscTombstones();
   }catch(e){console.warn('Gagal ambil data lain sebelum sinkron (tetap lanjut kirim versi lokal)',e);}
   const rows=PJ_MISC_KEYS.map(k=>({key:k,value:(k==='employeesUsers'?users:(db[k]===undefined?null:db[k])),updated_at:new Date().toISOString()}));
   await apiUpsert('putrajaya_appdata',rows,'key');
@@ -1949,6 +1978,16 @@ async function pullMiscFromCloud(){
     if(remoteMap.payments!=null)db.payments=Object.assign({},db.payments||{},remoteMap.payments||{});
     if(remoteMap.settings!=null)db.settings=Object.assign({},db.settings||{},remoteMap.settings||{});
     ['pengeluaranArsipTotal','setoranArsipTotal','salesTunaiArsipTotal'].forEach(k=>{if(remoteMap[k]!=null)db[k]=remoteMap[k]});
+    // pj-fix-hapus-tombstone-v1: begitu daftar barang/transaksi yang sudah
+    // dihapus (tombstone) ditarik dari server, langsung buang dari data
+    // lokal HP ini SEBELUM sempat ikut terkirim ulang ke server.
+    pjApplyTombstones();
+    // pj-fix-hapus-tombstone-v2: sama, tapi untuk data lain (notifikasi,
+    // catatan belanja, kategori, uang keluar, hutang, pengeluaran, setoran,
+    // riwayat aktivitas) — supaya semuanya juga otomatis hilang di HP lain
+    // begitu app dibuka/refresh, tanpa perlu aktivitas apa pun dulu.
+    if(remoteMap.miscTombstones!=null)pjMergeMiscTombstones(remoteMap.miscTombstones);
+    pjApplyMiscTombstones();
     localStorage.setItem(KEY,JSON.stringify(db));
     return true;
   }catch(e){console.warn('Gagal menarik data lain dari cloud',e);return false;}
@@ -1970,6 +2009,7 @@ async function restoreFromCloud(){
     if(!remoteProducts.length && !remoteMoves.length)return false;
     db.products=remoteProducts.map(productFromRemote);
     db.moves=remoteMoves.map(moveFromRemote);
+    pjApplyTombstones();
     localStorage.setItem(KEY,JSON.stringify(db));
     localStorage.setItem(LASTSYNCKEY,new Date().toISOString());
     return true;
@@ -2011,13 +2051,29 @@ document.addEventListener('DOMContentLoaded',async function(){
     }else if(navigator.onLine){
       // HP ini sudah punya data produk/transaksi, tapi tetap tarik data
       // lain (hutang, kategori, pengaturan, dll) supaya konsisten antar HP.
-      pullMiscFromCloud().catch(()=>{});
+      // pj-fix-hapus-tombstone-v1: ini juga menarik daftar barang/transaksi
+      // yang sudah dihapus di HP lain — begitu diterapkan, refresh tampilan
+      // supaya barang yang terhapus langsung hilang tanpa perlu aktivitas apa pun.
+      pullMiscFromCloud().then(ok=>{if(ok&&typeof pjRefreshCurrentView==='function')pjRefreshCurrentView();}).catch(()=>{});
     }
   }catch(e){console.warn(e);}
 });
 const LASTSYNCKEY='putrajaya_last_online_sync';
 async function syncOnline(){
   if(!navigator.onLine)return;
+  // pj-fix-hapus-tombstone-v1: JARING PENGAMAN UTAMA. syncOnline() ini
+  // dipanggil oleh save() SETIAP kali ada perubahan apa pun (bukan cuma saat
+  // hapus), dan mengirim SELURUH daftar db.products/db.moves ke server.
+  // Kalau HP ini masih menyimpan salinan lama barang yang sudah dihapus di
+  // HP lain (belum sempat ditarik), barang itu bisa "hidup lagi" begitu ikut
+  // terkirim di sini. Jadi sebelum kirim, buang dulu apa pun yang ada di
+  // tombstone lokal — dan supaya tombstone-nya sendiri paling baru, tarik
+  // dulu tombstone terbaru dari server kalau memungkinkan.
+  try{
+    const rows=await apiGet('putrajaya_appdata','select=key,value&key=in.(deletedProductIds,deletedMoveIds)');
+    rows.forEach(r=>{if(Array.isArray(r.value))db[r.key]=pjMergeById(db[r.key],r.value,'id');});
+  }catch(e){console.warn('Gagal menarik tombstone terbaru sebelum sync',e);}
+  pjApplyTombstones();
   for(const p of db.products){if(!isUUID(p.id)){const old=p.id;p.id=newId();db.moves.forEach(m=>{if(String(m.productId)===String(old))m.productId=p.id;});}}
   for(const m of db.moves){if(!isUUID(m.id))m.id=newId();}
   await apiUpsert('putrajaya_products',db.products.map(productToRemote));
@@ -2066,7 +2122,7 @@ function pjMergeStrings(localArr,remoteArr){
   [...(Array.isArray(localArr)?localArr:[]),...(Array.isArray(remoteArr)?remoteArr:[])].forEach(s=>{const k=String(s||'').trim();if(k)seen.set(k.toLowerCase(),k)});
   return Array.from(seen.values());
 }
-const PJ_ID_KEYED_MISC=['activityLog','customerDebts','supplierDebts','deletedDebtHistory','notifications','pengeluaran','setoranBos','shoppingNotes','cashOuts'];
+const PJ_ID_KEYED_MISC=['activityLog','customerDebts','supplierDebts','deletedDebtHistory','notifications','pengeluaran','setoranBos','shoppingNotes','cashOuts','deletedProductIds','deletedMoveIds'];
 async function pjMergePullAll(){
   if(!navigator.onLine)return;
   try{
@@ -2236,7 +2292,8 @@ function openNotifPanel(){
 }
 async function deleteNotification(id){
   db.notifications=(db.notifications||[]).filter(x=>x.id!==id);
-  await pjForceSyncKey('notifications');
+  pjMiscTombstoneAdd('notifications',id);
+  await Promise.all([pjForceSyncKey('notifications'),pjPushMiscTombstone()]);
   save();
   renderNotifList();
   updateNotifBadge();
@@ -2244,8 +2301,10 @@ async function deleteNotification(id){
 async function deleteAllNotifications(){
   if(!(db.notifications||[]).length)return;
   if(!confirm('Hapus semua pesan masuk?'))return;
+  const removedIds=(db.notifications||[]).map(x=>x.id);
   db.notifications=[];
-  await pjForceSyncKey('notifications');
+  removedIds.forEach(id=>pjMiscTombstoneAdd('notifications',id));
+  await Promise.all([pjForceSyncKey('notifications'),pjPushMiscTombstone()]);
   save();
   renderNotifList();
   updateNotifBadge();
@@ -2325,6 +2384,132 @@ db.products.forEach(p=>{
 });
 refreshLocationNames();
 
+/* pj-fix-hapus-tombstone-v1: "kuburan" ID barang & transaksi yang sudah dihapus.
+   Tujuannya: kalau HP lain masih punya salinan lama barang yang sudah dihapus
+   di HP ini (karena belum sempat sinkron), begitu HP itu dibuka/refresh dan
+   menarik daftar tombstone ini, barang tersebut LANGSUNG dibuang dari data
+   lokalnya SEBELUM sempat ikut terkirim ulang ke server lewat syncOnline().
+   Ini mencegah barang yang sudah dihapus "hidup lagi". */
+db.deletedProductIds=Array.isArray(db.deletedProductIds)?db.deletedProductIds:[];
+db.deletedMoveIds=Array.isArray(db.deletedMoveIds)?db.deletedMoveIds:[];
+function pjTombstoneAdd(listKey,id){
+  if(!id)return;
+  const list=db[listKey]=Array.isArray(db[listKey])?db[listKey]:[];
+  const key=String(id);
+  const i=list.findIndex(x=>String(x&&x.id)===key);
+  const entry={id:key,deletedAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  if(i>=0)list[i]=entry;else list.push(entry);
+}
+// Buang barang/transaksi yang ID-nya ada di tombstone dari array lokal.
+// Dipakai setiap kali data tombstone baru ditarik dari server (saat app
+// dibuka/refresh, saat auto-pull berkala, dan saat realtime update masuk).
+function pjApplyTombstones(){
+  let changed=false;
+  if(Array.isArray(db.deletedProductIds)&&db.deletedProductIds.length&&Array.isArray(db.products)){
+    const ids=new Set(db.deletedProductIds.map(x=>String(x&&x.id)));
+    const before=db.products.length;
+    db.products=db.products.filter(p=>!ids.has(String(p&&p.id)));
+    if(db.products.length!==before)changed=true;
+  }
+  if(Array.isArray(db.deletedMoveIds)&&db.deletedMoveIds.length&&Array.isArray(db.moves)){
+    const ids=new Set(db.deletedMoveIds.map(x=>String(x&&x.id)));
+    const before=db.moves.length;
+    db.moves=db.moves.filter(m=>!ids.has(String(m&&m.id)));
+    if(db.moves.length!==before)changed=true;
+  }
+  // Bersihkan tombstone yang sudah tua (>30 hari) supaya daftar ini tidak
+  // membesar terus-menerus — barang itu sudah lama hilang di semua HP.
+  const cutoff=Date.now()-30*24*60*60*1000;
+  ['deletedProductIds','deletedMoveIds'].forEach(k=>{
+    if(Array.isArray(db[k])){
+      const n=db[k].length;
+      db[k]=db[k].filter(x=>{const t=x&&x.deletedAt?new Date(x.deletedAt).getTime():0;return t>=cutoff;});
+      if(db[k].length!==n)changed=true;
+    }
+  });
+  if(changed)localStorage.setItem(KEY,JSON.stringify(db));
+  return changed;
+}
+
+/* pj-fix-hapus-tombstone-v2: perluasan tombstone ke SEMUA data lain yang bisa
+   dihapus satuan (notifikasi, catatan belanja, kategori, uang keluar, hutang
+   pelanggan/sales, riwayat penghapusan hutang, pengeluaran, setoran, riwayat
+   aktivitas). Sebelumnya, fungsi hapus di masing-masing fitur ini SUDAH benar
+   menghapus row di server & langsung push versi lokal (pjForceSyncKey) — tapi
+   itu cuma mencegah "hidup lagi" DI HP YANG SAMA. Kalau HP lain masih pegang
+   salinan lama item itu (belum sempat tarik update) dan lalu HP itu menyimpan
+   perubahan apa pun, proses gabung otomatis (pjMergeById, union — tidak pernah
+   MENGURANGI) akan memasukkan lagi item lama itu, lalu ikut terkirim balik ke
+   server. Solusinya sama seperti produk/transaksi: simpan "kuburan" ID yang
+   sudah dihapus per jenis data, tarik & terapkan setiap sinkron. */
+db.miscTombstones=(db.miscTombstones&&typeof db.miscTombstones==='object')?db.miscTombstones:{};
+// Kunci data (selain produk/transaksi) yang didukung tombstone ini.
+// 'categories' pakai nama (huruf kecil) sebagai id, bukan UUID.
+const PJ_MISC_TOMBSTONE_KEYS=['notifications','shoppingNotes','cashOuts','customerDebts','supplierDebts','deletedDebtHistory','pengeluaran','setoranBos','activityLog','categories'];
+function pjMiscTombstoneAdd(key,id){
+  if(!id)return;
+  const list=db.miscTombstones[key]=Array.isArray(db.miscTombstones[key])?db.miscTombstones[key]:[];
+  const idKey=(key==='categories')?String(id).trim().toLowerCase():String(id);
+  const i=list.findIndex(x=>String(x&&x.id)===idKey);
+  const entry={id:idKey,deletedAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  if(i>=0)list[i]=entry;else list.push(entry);
+}
+// Buang item yang ID-nya ada di miscTombstones dari array data lokal terkait.
+// Dipanggil setiap kali miscTombstones baru ditarik/diterima dari server.
+function pjApplyMiscTombstones(){
+  let changed=false;
+  PJ_MISC_TOMBSTONE_KEYS.forEach(key=>{
+    const tomb=db.miscTombstones[key];
+    if(!Array.isArray(tomb)||!tomb.length)return;
+    const ids=new Set(tomb.map(x=>String(x&&x.id)));
+    if(key==='categories'){
+      if(Array.isArray(db.categories)){
+        const before=db.categories.length;
+        db.categories=db.categories.filter(c=>!ids.has(String(c||'').trim().toLowerCase()));
+        if(db.categories.length!==before)changed=true;
+      }
+      return;
+    }
+    if(Array.isArray(db[key])){
+      const before=db[key].length;
+      db[key]=db[key].filter(x=>!ids.has(String(x&&x.id)));
+      if(db[key].length!==before)changed=true;
+    }
+  });
+  // Bersihkan tombstone yang sudah tua (>30 hari).
+  const cutoff=Date.now()-30*24*60*60*1000;
+  PJ_MISC_TOMBSTONE_KEYS.forEach(key=>{
+    if(Array.isArray(db.miscTombstones[key])){
+      const n=db.miscTombstones[key].length;
+      db.miscTombstones[key]=db.miscTombstones[key].filter(x=>{const t=x&&x.deletedAt?new Date(x.deletedAt).getTime():0;return t>=cutoff;});
+      if(db.miscTombstones[key].length!==n)changed=true;
+    }
+  });
+  if(changed)localStorage.setItem(KEY,JSON.stringify(db));
+  return changed;
+}
+// Gabungkan (union, tidak pernah mengurangi) miscTombstones lokal dengan yang
+// dari server — dipakai saat pull & sebelum push, sama seperti data lain.
+function pjMergeMiscTombstones(remoteMiscTombstones){
+  if(!remoteMiscTombstones||typeof remoteMiscTombstones!=='object')return;
+  Object.keys(remoteMiscTombstones).forEach(key=>{
+    db.miscTombstones[key]=pjMergeById(db.miscTombstones[key],remoteMiscTombstones[key],'id');
+  });
+}
+// Dorong miscTombstones ke server SEGERA setelah hapus, digabung dulu dengan
+// versi server (union) supaya tombstone yang baru ditambahkan HP lain (belum
+// sempat ditarik ke HP ini) tidak ikut hilang tertimpa.
+async function pjPushMiscTombstone(){
+  if(!navigator.onLine)return;
+  try{
+    let remote=null;
+    try{const rows=await apiGet('putrajaya_appdata','select=value&key=eq.miscTombstones');if(rows.length)remote=rows[0].value;}catch(e){}
+    pjMergeMiscTombstones(remote);
+    localStorage.setItem(KEY,JSON.stringify(db));
+    await apiUpsert('putrajaya_appdata',[{key:'miscTombstones',value:db.miscTombstones,updated_at:new Date().toISOString()}],'key');
+  }catch(e){console.warn('Gagal mendorong miscTombstones',e);}
+}
+
 db.moves=Array.isArray(db.moves)?db.moves:[];
 db.moves.forEach(x=>{if(typeof x.loc==='string') x.loc=x.loc.replace(/Gudang [1-4]/g,'GUDANG');});
 db.moves.forEach(x=>{if(x.total==null)x.total=0;if(x.laba==null)x.laba=0;});
@@ -2363,7 +2548,7 @@ const moneyField=(id,value='',required=false,readOnly=false)=>`<input id="${id}"
 function refreshMoneyInputs(){bindMoneyInputs(document)}
 
 function actorName(){return session?.username||'admin';}
-function logActivity(action,details=''){db.activityLog=db.activityLog||[];db.activityLog.unshift({id:newId(),action,details,user:actorName(),dateTime:new Date().toISOString()});if(db.activityLog.length>2000)db.activityLog.length=2000;try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('Gagal menyimpan activityLog',e)}}
+function logActivity(action,details=''){db.activityLog=db.activityLog||[];db.activityLog.unshift({id:newId(),action,details,user:actorName(),dateTime:new Date().toISOString(),updatedAt:new Date().toISOString()});if(db.activityLog.length>2000)db.activityLog.length=2000;try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('Gagal menyimpan activityLog',e)}}
 
 const PJ_SUPABASE_FREE_LIMIT_BYTES=500*1024*1024;
 function pjFormatBytes(b){if(b>=1024*1024)return (b/(1024*1024)).toFixed(1)+' MB';if(b>=1024)return (b/1024).toFixed(0)+' KB';return Math.round(b)+' B';}
@@ -3155,12 +3340,12 @@ function openShoppingNote(id=''){
   if(type==='catatan'){
    const isi=sbCatatanText.value.trim();
    if(!isi){alert('Isi catatan wajib diisi.');return}
-   data={id:id||newId(),type:'catatan',productId:null,nama:sbJudul.value.trim()||'Catatan',qty:0,satuan:'',tanggal:sbTanggal.value,catatan:isi,status:n?.status||'pending'};
+   data={id:id||newId(),type:'catatan',productId:null,nama:sbJudul.value.trim()||'Catatan',qty:0,satuan:'',tanggal:sbTanggal.value,catatan:isi,status:n?.status||'pending',updatedAt:new Date().toISOString()};
   }else{
    const pid=sbProduct.value;const product=db.products.find(x=>x.id===pid);
    const nama=product?product.nama:sbNama.value.trim();
    if(!nama){alert('Nama barang wajib diisi.');return}
-   data={id:id||newId(),type:'barang',productId:pid||null,nama,qty:+sbQty.value||1,satuan:sbSatuan.value.trim()||'pcs',tanggal:sbTanggal.value,catatan:sbCatatan.value.trim(),status:n?.status||'pending'};
+   data={id:id||newId(),type:'barang',productId:pid||null,nama,qty:+sbQty.value||1,satuan:sbSatuan.value.trim()||'pcs',tanggal:sbTanggal.value,catatan:sbCatatan.value.trim(),status:n?.status||'pending',updatedAt:new Date().toISOString()};
   }
   const i=db.shoppingNotes.findIndex(x=>x.id===id);if(i>=0)db.shoppingNotes[i]=data;else db.shoppingNotes.unshift(data);
   save();closeM();renderShoppingNotes();toast(type==='catatan'?'✓ Catatan disimpan':'✓ Catatan belanja disimpan')
@@ -3173,7 +3358,7 @@ function toggleShoppingNoteType(){
  if(barangEl)barangEl.style.display=type==='barang'?'grid':'none';
  if(catatanEl)catatanEl.style.display=type==='catatan'?'grid':'none';
 }
-function markShoppingDone(id){const n=db.shoppingNotes.find(x=>x.id===id);if(!n)return;n.status='done';n.dibeliAt=new Date().toISOString();save();renderShoppingNotes();}
+function markShoppingDone(id){const n=db.shoppingNotes.find(x=>x.id===id);if(!n)return;n.status='done';n.dibeliAt=new Date().toISOString();n.updatedAt=new Date().toISOString();save();renderShoppingNotes();}
 function receiveShopping(id){
  const n=db.shoppingNotes.find(x=>String(x.id)===String(id));
  if(!n||!n.productId)return alert('Catatan ini belum terhubung ke katalog barang.');
@@ -3181,7 +3366,7 @@ function receiveShopping(id){
  if(!p)return alert('Produk dari catatan belanja tidak ditemukan di katalog.');
  movement('in',p.id,n.qty||1);
 }
-async function deleteShoppingNote(id){if(!confirm('Hapus catatan belanja ini?'))return;db.shoppingNotes=db.shoppingNotes.filter(x=>x.id!==id);await pjForceSyncKey('shoppingNotes');save();renderShoppingNotes();}
+async function deleteShoppingNote(id){if(!confirm('Hapus catatan belanja ini?'))return;db.shoppingNotes=db.shoppingNotes.filter(x=>x.id!==id);pjMiscTombstoneAdd('shoppingNotes',id);await Promise.all([pjForceSyncKey('shoppingNotes'),pjPushMiscTombstone()]);save();renderShoppingNotes();}
 function addShoppingToCatalog(id){const n=db.shoppingNotes.find(x=>x.id===id);if(!n)return;closeM();openProduct();setTimeout(()=>{const el=document.getElementById('nama');if(el)el.value=n.nama;toast('Nama barang sudah diisi dari Catatan Belanja')},50)}
 let selectedCategory='ALL';
 let selectedStockFilter='ALL';
@@ -3360,7 +3545,7 @@ function openCategoryManager(){if(!canAdmin())return alert('Hanya Admin yang dap
 function bindCategoryManagerActions(cats){const box=document.getElementById('categoryManagerList');if(!box)return;box.querySelectorAll('[data-action=\"edit-category\"]').forEach(b=>b.addEventListener('click',()=>editCategory(cats[+b.dataset.categoryIndex])));box.querySelectorAll('[data-action=\"delete-category\"]').forEach(b=>b.addEventListener('click',()=>deleteCategory(cats[+b.dataset.categoryIndex])))}
 function addCategory(){if(!canAdmin())return;const el=document.getElementById('newCategoryName'),name=(el?.value||'').trim();if(!name)return alert('Nama kategori wajib diisi.');if(getCategories().some(c=>c.toLowerCase()===name.toLowerCase()))return alert('Kategori sudah ada.');db.categories.push(name);saveCategories();logActivity('Tambah Kategori',name);openCategoryManager();toast('✓ Kategori ditambahkan')}
 function editCategory(oldName){if(!canAdmin())return;const name=prompt('Nama kategori baru:',oldName);if(name===null)return;const n=name.trim();if(!n)return alert('Nama kategori wajib diisi.');if(n.toLowerCase()!==oldName.toLowerCase()&&getCategories().some(c=>c.toLowerCase()===n.toLowerCase()))return alert('Kategori sudah ada.');db.products.forEach(p=>{if(String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===oldName.toLowerCase())p.kategori=n});db.categories=getCategories().filter(c=>c.toLowerCase()!==oldName.toLowerCase());db.categories.push(n);save();logActivity('Edit Kategori',oldName+' → '+n);openCategoryManager();toast('✓ Kategori diperbarui')}
-async function deleteCategory(name){if(!canAdmin())return;const count=db.products.filter(p=>String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase()).length;if(!confirm('Hapus kategori '+name+'?'+(count?' Barang yang memakai kategori ini tetap dipertahankan, tetapi kategorinya akan dikosongkan.':'')))return;db.products.forEach(p=>{if(String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase())p.kategori=''});db.categories=getCategories().filter(c=>c.toLowerCase()!==name.toLowerCase());await pjForceSyncKey('categories');save();logActivity('Hapus Kategori',name);openCategoryManager();toast('✓ Kategori dihapus')}
+async function deleteCategory(name){if(!canAdmin())return;const count=db.products.filter(p=>String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase()).length;if(!confirm('Hapus kategori '+name+'?'+(count?' Barang yang memakai kategori ini tetap dipertahankan, tetapi kategorinya akan dikosongkan.':'')))return;db.products.forEach(p=>{if(String(p.kategori ?? p.category ?? p.categoryId ?? '').trim().toLowerCase()===name.toLowerCase())p.kategori=''});db.categories=getCategories().filter(c=>c.toLowerCase()!==name.toLowerCase());pjMiscTombstoneAdd('categories',name);await Promise.all([pjForceSyncKey('categories'),pjPushMiscTombstone()]);save();logActivity('Hapus Kategori',name);openCategoryManager();toast('✓ Kategori dihapus')}
 function categorySelectFocus(el){if(el)el.dataset.previous=el.value||''}
 function categorySelectChanged(el){if(!el)return;if(el.value==='__add_category__'){const previous=el.dataset.previous||'';openQuickCategory();setTimeout(()=>{if(document.getElementById('kategori'))document.getElementById('kategori').value=previous;},0);return}el.dataset.previous=el.value||''}
 function openQuickCategory(){
@@ -3425,7 +3610,7 @@ function openProduct(id=''){
  let namaNormal=namaProduk.toLowerCase();
  let duplikat=db.products.find(x=>x.id!==id && String(x.nama||'').trim().toLowerCase()===namaNormal);
  if(duplikat){alert('Nama produk sudah ada. Barang yang sama tidak boleh duplikat.');nama.focus();return}
- let data={id:id||newId(),nama:namaProduk,kode:kode.value,kategori:kategori.value==='__add_category__'?'':kategori.value.trim(),modal:moneyValue(modalHarga.value),min:+minimum.value,stokT:p?.stokT||0,stokG1:p?.stokG1||0,foto:pendingPhoto};let qty=+stokAwal.value;if(!p){setStockAt(data,lokasi.value,qty)}
+ let data={id:id||newId(),nama:namaProduk,kode:kode.value,kategori:kategori.value==='__add_category__'?'':kategori.value.trim(),modal:moneyValue(modalHarga.value),min:+minimum.value,stokT:p?.stokT||0,stokG1:p?.stokG1||0,foto:pendingPhoto,updatedAt:new Date().toISOString()};let qty=+stokAwal.value;if(!p){setStockAt(data,lokasi.value,qty)}
  let done=()=>{let i=db.products.findIndex(x=>x.id===data.id);let baru=i<0;if(i>=0)db.products[i]=data;else db.products.unshift(data);save();closeM();page('products');if(baru){toast('✓ Barang berhasil ditambahkan')}else{toast('✓ Barang berhasil diperbarui')}};
  done()}
 }
@@ -3577,7 +3762,8 @@ function movement(type,presetProductId='',presetQty=''){
       total:0,
       laba:0,
       modalTotal:+p.modal*q,
-      user:session?.username||'-'
+      user:session?.username||'-',
+      updatedAt:new Date().toISOString()
     });
 
     if(type==='in')logActivity('Tambah Stok',(p.nama||'')+' : +'+q+' ke '+lokasi.value);
@@ -3718,7 +3904,8 @@ function openOutForm(outType){
       modalTotal:modalTotal,
       payment:outType==='toko'?(document.getElementById('paymentMethod')?.value||'TUNAI'):'',
       paymentAmount:outType==='toko'?total:0,
-      user:session?.username||'-'
+      user:session?.username||'-',
+      updatedAt:new Date().toISOString()
     };
     db.moves.unshift(newMove);
 
@@ -3790,11 +3977,14 @@ async function deleteActivityByAge(days){
   else message=`Yakin ingin menghapus riwayat aktivitas yang lebih dari ${days} hari?`;
   if(!confirm(message))return;
   const before=logs.length;
+  const beforeIds=new Set(logs.map(x=>x.id));
   if(days===0)db.activityLog=[];
   else {const cutoff=Date.now()-days*86400000;db.activityLog=logs.filter(x=>{const t=Date.parse(x.dateTime);return !Number.isFinite(t)||t>=cutoff})}
   const removed=before-db.activityLog.length;
+  const afterIds=new Set(db.activityLog.map(x=>x.id));
+  beforeIds.forEach(id=>{if(!afterIds.has(id))pjMiscTombstoneAdd('activityLog',id);});
   localStorage.setItem(KEY,JSON.stringify(db));
-  await pjForceSyncKey('activityLog');
+  await Promise.all([pjForceSyncKey('activityLog'),pjPushMiscTombstone()]);
   closeM();
   toast(`✓ ${removed} riwayat dihapus`);
   renderActivityHistory();
@@ -4083,7 +4273,23 @@ function resetAll(){
  const pass=prompt('Masukkan password Admin untuk konfirmasi Reset Semua Data:');
  if(pass===null)return;
  if(!users.admin||pass!==users.admin.password){alert('Password Admin salah. Reset dibatalkan.');return;}
- if(confirm('PERINGATAN: semua barang dan riwayat akan dihapus. Lanjutkan?')){pjRemoteDeleteAll('putrajaya_products');pjRemoteDeleteAll('putrajaya_moves');db={products:[],moves:[],shoppingNotes:[]};save();page('home');toast('Data direset')}}
+ if(confirm('PERINGATAN: semua barang dan riwayat akan dihapus. Lanjutkan?')){
+   // pj-fix-hapus-tombstone-v2: sebelum di-wipe, catat dulu SEMUA id barang &
+   // transaksi yang ada saat ini sebagai tombstone — supaya HP lain yang masih
+   // punya salinan lamanya tidak menghidupkan lagi semua data begitu HP itu
+   // dibuka/refresh atau menyimpan sesuatu setelah reset ini.
+   const oldProductIds=(db.products||[]).map(p=>p.id);
+   const oldMoveIds=(db.moves||[]).map(m=>m.id);
+   pjRemoteDeleteAll('putrajaya_products');pjRemoteDeleteAll('putrajaya_moves');
+   const keepDeletedProductIds=Array.isArray(db.deletedProductIds)?db.deletedProductIds:[];
+   const keepDeletedMoveIds=Array.isArray(db.deletedMoveIds)?db.deletedMoveIds:[];
+   const keepMiscTombstones=(db.miscTombstones&&typeof db.miscTombstones==='object')?db.miscTombstones:{};
+   db={products:[],moves:[],shoppingNotes:[],deletedProductIds:keepDeletedProductIds,deletedMoveIds:keepDeletedMoveIds,miscTombstones:keepMiscTombstones};
+   oldProductIds.forEach(id=>pjTombstoneAdd('deletedProductIds',id));
+   oldMoveIds.forEach(id=>pjTombstoneAdd('deletedMoveIds',id));
+   pjPushTombstone('deletedProductIds');
+   pjPushTombstone('deletedMoveIds');
+   save();page('home');toast('Data direset')}}
 function closeM(){
   sheet.classList.remove('product-form-sheet','category-manager-sheet','sales-sheet','confirm-sale-sheet','permission-sheet','damage-sheet');
   modal.style.zIndex='20';
@@ -4098,7 +4304,7 @@ function closeM(){
     });
   }
 }
-function delProduct(id){if(confirm('Hapus barang? Riwayat transaksi tetap disimpan.')){pjRemoteDelete('putrajaya_products',id);db.products=db.products.filter(p=>p.id!==id);save();renderProducts()}}
+function delProduct(id){if(confirm('Hapus barang? Riwayat transaksi tetap disimpan.')){pjRemoteDelete('putrajaya_products',id);pjTombstoneAdd('deletedProductIds',id);pjPushTombstone('deletedProductIds');db.products=db.products.filter(p=>p.id!==id);save();renderProducts()}}
 if(!LOGIN_ENABLED){
   const savedSession=JSON.parse(localStorage.getItem(SESSIONKEY)||'null');
   session=savedSession&&['admin','karyawan'].includes(savedSession.role)?savedSession:{username:'admin',role:'admin',name:(users.admin?.name||'Admin')};
@@ -4111,13 +4317,13 @@ if(!LOGIN_ENABLED){
 (function(){
   const baseSave=save;
   function safeLog(action,details){try{logActivity(action,details)}catch(e){console.warn(e)}}
-  window.addLowStockToShopping=function(id){const p=db.products.find(x=>x.id===id);if(!p)return;const need=Math.max(1,(+p.min||0)-totalStockOf(p)+1);const existing=db.shoppingNotes.find(n=>n.productId===p.id&&n.status!=='done');if(existing){existing.qty=Math.max(existing.qty||0,need);existing.tanggal=today();existing.catatan=existing.catatan||'Dibuat dari Stok Menipis';}else db.shoppingNotes.unshift({id:newId(),productId:p.id,nama:p.nama,qty:need,satuan:'pcs',tanggal:today(),catatan:'Dibuat dari Stok Menipis',status:'pending'});safeLog('Tambah Catatan Belanja','Dari Stok Menipis: '+p.nama);save();toast('✓ Ditambahkan ke Catatan Belanja');};
+  window.addLowStockToShopping=function(id){const p=db.products.find(x=>x.id===id);if(!p)return;const need=Math.max(1,(+p.min||0)-totalStockOf(p)+1);const existing=db.shoppingNotes.find(n=>n.productId===p.id&&n.status!=='done');if(existing){existing.qty=Math.max(existing.qty||0,need);existing.tanggal=today();existing.catatan=existing.catatan||'Dibuat dari Stok Menipis';existing.updatedAt=new Date().toISOString();}else db.shoppingNotes.unshift({id:newId(),productId:p.id,nama:p.nama,qty:need,satuan:'pcs',tanggal:today(),catatan:'Dibuat dari Stok Menipis',status:'pending',updatedAt:new Date().toISOString()});safeLog('Tambah Catatan Belanja','Dari Stok Menipis: '+p.nama);save();toast('✓ Ditambahkan ke Catatan Belanja');};
   window.nextTransactionNo=function(){const d=today().replaceAll('-','');let max=0;for(const m of db.moves||[]){const n=String(m.no||'');const mat=n.match(/^PJ-(\d{8})-(\d{4,})$/);if(mat&&mat[1]===d)max=Math.max(max,parseInt(mat[2],10)||0)}return 'PJ-'+d+'-'+String(max+1).padStart(4,'0')};
   window.renderLowStock=function(){let list=db.products.filter(p=>totalStockOf(p)<=+(p.min??3));app.innerHTML=`<div class="card"><h2>Stok Menipis</h2><div class="muted">Produk dengan stok sama dengan atau di bawah batas minimum.</div><div class="card" style="margin-top:10px;background:#f7f9fc"><b>⚠️ ${list.length} barang</b> berada di bawah batas minimum.</div><div class="grid" style="margin-top:12px">${list.length?list.map(p=>`<div class="card product"><img src="${p.foto||DEFAULT_PRODUCT_PHOTO}" style="cursor:pointer" onclick="showProductDetail('${p.id}')"><h3>${esc(p.nama)}</h3><div class="muted">${esc(p.kode)} · ${esc(p.kategori||'-')}</div><div class="stock">${productStockLineBold(p)}</div><div class="dangerText">MINIMUM: ${p.min} pcs</div><div class="actions"><button onclick="openProduct('${p.id}')">Edit</button><button class="success" onclick="addLowStockToShopping('${p.id}')">+ Catatan Belanja</button></div></div>`).join(''):'<div class="empty">Tidak ada stok menipis.</div>'}</div></div>`};
   window.renderHistory=function(){let list=db.moves||[];app.innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Laporan Transaksi</h2><button type="button" class="gray" onclick="page('activity')">Buka Laporan Aktivitas ›</button></div><div class="toolbar"><input id="hq" placeholder="Cari transaksi..." oninput="historyCards()"><button onclick="clearHistory()" class="danger">Hapus Riwayat</button></div><div class="tablewrap pj-txn-tablewrap"><table class="table pj-txn-table"><thead><tr><th>No.</th><th>Tanggal</th><th>Jenis</th><th>Barang</th><th>Qty</th><th>Lokasi</th><th>Nilai Modal</th><th>Omzet</th><th>Laba</th><th>Aksi</th></tr></thead><tbody id="hist"></tbody></table></div></div>`;historyCards()};
   window.historyCards=function(){let q=(document.getElementById('hq')?.value||'').toLowerCase();let l=(db.moves||[]).filter(x=>(String(x.product)+' '+String(x.type)+' '+String(x.note)+' '+String(x.loc)+' '+String(x.no||'')).toLowerCase().includes(q));const el=document.getElementById('hist');if(el)el.innerHTML=l.length?l.map(x=>`<tr><td>${esc(x.no||'-')}</td><td>${x.date}</td><td><span class="pill">${esc(x.type)}</span></td><td>${esc(x.product)}</td><td>${x.qty}</td><td>${esc(locLabel(x.loc))}</td><td>${x.modalTotal?modalText(modalScope(x.loc),x.modalTotal):'-'}</td><td>${x.type==='Penjualan Toko'&&!x.cancelled?rupiah(x.total):'-'}</td><td>${x.type==='Penjualan Toko'&&!x.cancelled?rupiah(x.laba):'-'}</td><td><button class="smallbtn danger" onclick="deleteTransaction('${x.id}')">Hapus</button></td></tr>`).join(''):'<tr><td colspan="10" class="empty">Belum ada transaksi.</td></tr>'};
-  window.deleteTransaction=function(id){if(!hasPermission('Hapus Transaksi')){alert('Anda tidak memiliki izin menghapus transaksi.');return}const m=db.moves.find(x=>String(x.id)===String(id));if(!m)return;if(!confirm('⚠️ Yakin ingin menghapus transaksi ini?'))return;pjRemoteDelete('putrajaya_moves',m.id);db.moves=db.moves.filter(x=>String(x.id)!==String(id));logActivity('Hapus Transaksi',(m.no||m.id||'')+' '+(m.product||''));save();renderHistory();toast('✓ Transaksi dihapus')};
-  window.clearHistory=function(){if(!requireAdmin())return;if(confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Log aktivitas tetap dipertahankan. Tindakan ini tidak bisa dibatalkan.')){const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&isTunaiSale(x)).reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;pjRemoteDeleteAll('putrajaya_moves');db.moves=[];safeLog('Hapus Riwayat Transaksi','Semua transaksi dihapus, saldo kas & stok tetap aman, log aktivitas dipertahankan');save();renderHistory();if(typeof window.cashHeld==='function')window.cashHeld();toast('✓ Riwayat transaksi dikosongkan, saldo kas & stok tidak berubah')}};
+  window.deleteTransaction=function(id){if(!hasPermission('Hapus Transaksi')){alert('Anda tidak memiliki izin menghapus transaksi.');return}const m=db.moves.find(x=>String(x.id)===String(id));if(!m)return;if(!confirm('⚠️ Yakin ingin menghapus transaksi ini?'))return;pjRemoteDelete('putrajaya_moves',m.id);pjTombstoneAdd('deletedMoveIds',m.id);pjPushTombstone('deletedMoveIds');db.moves=db.moves.filter(x=>String(x.id)!==String(id));logActivity('Hapus Transaksi',(m.no||m.id||'')+' '+(m.product||''));save();renderHistory();toast('✓ Transaksi dihapus')};
+  window.clearHistory=function(){if(!requireAdmin())return;if(confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi? Saldo Uang di Toko & stok barang tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Log aktivitas tetap dipertahankan. Tindakan ini tidak bisa dibatalkan.')){const tunaiDihapus=(db.moves||[]).filter(x=>x&&x.type==='Penjualan Toko'&&!x.cancelled&&isTunaiSale(x)).reduce((sum,x)=>sum+(Number(x.paymentAmount??x.total)||0),0);db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;const removedMoveIds=(db.moves||[]).map(m=>m.id);pjRemoteDeleteAll('putrajaya_moves');db.moves=[];removedMoveIds.forEach(id=>pjTombstoneAdd('deletedMoveIds',id));pjPushTombstone('deletedMoveIds');safeLog('Hapus Riwayat Transaksi','Semua transaksi dihapus, saldo kas & stok tetap aman, log aktivitas dipertahankan');save();renderHistory();if(typeof window.cashHeld==='function')window.cashHeld();toast('✓ Riwayat transaksi dikosongkan, saldo kas & stok tidak berubah')}};
   // Safer backup/restore: include users, settings, counters, notes, photos and activity log.
   window.renderBackup=function(){if(!requireAdmin())return;app.innerHTML=`<div class="card"><h2>Backup & Restore</h2><p class="muted">Backup mencakup seluruh data aplikasi: katalog, stok, transaksi, foto, akun, hak akses, Catatan Belanja, pengaturan, nomor transaksi, dan Riwayat Aktivitas.</p><div class="actions"><button onclick="backup()">Download Backup Lengkap</button><button class="success" onclick="document.getElementById('restoreFile').click()">↻ Pulihkan Data (Restore)</button><input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restore(event)"></div><div class="muted" style="margin-top:6px">Pilih file backup (.json) yang pernah diunduh untuk memulihkan data.</div><hr><button class="danger" onclick="resetAll()">Reset Semua Data</button></div><div class="card" style="margin-top:10px"><h2>Backup Online</h2><p class="muted">Data barang &amp; transaksi otomatis tersinkron ke server online setiap ada perubahan, dan disinkron ulang otomatis setiap 5 menit selama HP terhubung internet.</p><div class="card" id="onlineSyncStatus" style="background:#f7f9fc;border:1px solid #dce5f2">${navigator.onLine?'🟢 Online':'🔴 Offline'} · <span id="onlineSyncTime">${lastOnlineSyncText()}</span></div><div class="actions" style="margin-top:10px"><button class="success" onclick="manualSyncOnline()">Backup Online Sekarang</button></div></div><div class="card" style="margin-top:10px"><h2>Diagnostik Sinkron</h2><p class="muted">Cek langsung ke server Supabase: berapa data yang benar-benar tersimpan online, dan apakah ada bagian yang belum tersinkron.</p><div class="actions"><button onclick="runSupabaseDiagnostic()">Jalankan Diagnostik</button></div><div id="pjDiagResult" style="margin-top:10px"></div></div>${renderStorageUsageCard()}`;setTimeout(()=>{if(window.refreshStorageUsage)refreshStorageUsage();},0);};
   window.runSupabaseDiagnostic=async function(){
@@ -4384,8 +4590,8 @@ if(!LOGIN_ENABLED){
   // ---------- Uang Keluar ----------
   window.renderCashOut=function(){if(!hasPermission('Lihat Uang Keluar'))return alert('Anda tidak memiliki izin melihat Uang Keluar.');const q=(document.getElementById('cashQ')?.value||'').toLowerCase();const list=db.cashOuts.filter(x=>(x.kategori+' '+x.keterangan+' '+x.catatan).toLowerCase().includes(q));const total=list.reduce((a,x)=>a+(+x.jumlah||0),0);app.innerHTML='<div class="card"><h2>Uang Keluar</h2><div class="muted">Pengeluaran toko selain transaksi barang keluar.</div><div class="toolbar"><input id="cashQ" placeholder="Cari kategori/keterangan..." value="'+safe(q)+'" oninput="renderCashOut()"><button onclick="openCashOut()">+ Tambah</button></div><div class="card"><b>Total ditampilkan: '+rupiah(total)+'</b></div><div class="tablewrap"><table class="table"><thead><tr><th>Tanggal</th><th>Kategori</th><th>Keterangan</th><th>Jumlah</th><th>Aksi</th></tr></thead><tbody>'+(list.length?list.map(x=>'<tr><td>'+fmtDate(x.tanggal)+'</td><td>'+safe(x.kategori)+'</td><td>'+safe(x.keterangan)+'</td><td>'+rupiah(x.jumlah)+'</td><td><button class="smallbtn" onclick="openCashOut(\''+x.id+'\')">Edit</button> <button class="smallbtn danger" onclick="deleteCashOut(\''+x.id+'\')">Hapus</button></td></tr>').join(''):'<tr><td colspan="5" class="empty">Belum ada Uang Keluar.</td></tr>')+'</tbody></table></div></div>'}
   window.openCashOut=function(id=''){if(!hasPermission('Tambah/Edit Uang Keluar'))return alert('Anda tidak memiliki izin menambah/edit Uang Keluar.');const x=db.cashOuts.find(a=>a.id===id);sheet.innerHTML='<h2>'+(x?'Edit':'Tambah')+' Uang Keluar</h2><label>Tanggal</label><input id="coDate" type="date" value="'+safe(x?.tanggal||today())+'"><label>Kategori</label><input id="coCat" value="'+safe(x?.kategori||'')+'" placeholder="Listrik, Transportasi, Gaji..."><label>Keterangan</label><input id="coKet" value="'+safe(x?.keterangan||'')+'"><label>Jumlah</label>'+moneyField('coAmt',x?.jumlah||'',false)+'<label>Catatan</label><textarea id="coNote" rows="2">'+safe(x?.catatan||'')+'</textarea><div class="actions"><button class="gray" type="button" onclick="closeM()">Batal</button><button class="success" type="button" onclick="saveCashOut(\''+safe(id)+'\')">Simpan</button></div>';modal.classList.add('show')}
-  window.saveCashOut=function(id){const tanggal=coDate.value,kategori=coCat.value.trim(),keterangan=coKet.value.trim(),jumlah=moneyValue(coAmt.value);if(!tanggal||!kategori||jumlah<=0)return alert('Tanggal, kategori, dan jumlah wajib diisi.');const old=db.cashOuts.find(x=>x.id===id);const d={id:id||newId(),tanggal,kategori,keterangan,jumlah,catatan:coNote.value.trim()};if(old)Object.assign(old,d);else db.cashOuts.unshift(d);persist(old?'Edit Uang Keluar':'Tambah Uang Keluar',kategori+' '+rupiah(jumlah));closeM();renderCashOut();toast('✓ Uang Keluar tersimpan')}
-  window.deleteCashOut=async function(id){if(!hasPermission('Hapus Uang Keluar'))return alert('Anda tidak memiliki izin menghapus Uang Keluar.');const x=db.cashOuts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus Uang Keluar ini?'))return;db.cashOuts=db.cashOuts.filter(a=>a.id!==id);await pjForceSyncKey('cashOuts');persist('Hapus Uang Keluar',x.kategori+' '+rupiah(x.jumlah));renderCashOut();toast('✓ Uang Keluar dihapus')}
+  window.saveCashOut=function(id){const tanggal=coDate.value,kategori=coCat.value.trim(),keterangan=coKet.value.trim(),jumlah=moneyValue(coAmt.value);if(!tanggal||!kategori||jumlah<=0)return alert('Tanggal, kategori, dan jumlah wajib diisi.');const old=db.cashOuts.find(x=>x.id===id);const d={id:id||newId(),tanggal,kategori,keterangan,jumlah,catatan:coNote.value.trim(),updatedAt:new Date().toISOString()};if(old)Object.assign(old,d);else db.cashOuts.unshift(d);persist(old?'Edit Uang Keluar':'Tambah Uang Keluar',kategori+' '+rupiah(jumlah));closeM();renderCashOut();toast('✓ Uang Keluar tersimpan')}
+  window.deleteCashOut=async function(id){if(!hasPermission('Hapus Uang Keluar'))return alert('Anda tidak memiliki izin menghapus Uang Keluar.');const x=db.cashOuts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus Uang Keluar ini?'))return;db.cashOuts=db.cashOuts.filter(a=>a.id!==id);pjMiscTombstoneAdd('cashOuts',id);await Promise.all([pjForceSyncKey('cashOuts'),pjPushMiscTombstone()]);persist('Hapus Uang Keluar',x.kategori+' '+rupiah(x.jumlah));renderCashOut();toast('✓ Uang Keluar dihapus')}
 
   // ---------- Tutup Hari ----------
   window.renderClosing=function(){if(!hasPermission('Tutup Hari'))return alert('Anda tidak memiliki izin Tutup Hari.');const canLabaBersih=canAdmin()||hasPermission('Lihat Laba Bersih');const d=today();const already=db.dayClosings.find(x=>x.tanggal===d);const list=db.dayClosings.slice().sort((a,b)=>b.tanggal.localeCompare(a.tanggal));app.innerHTML='<div class="card"><h2>Tutup Kasir / Tutup Hari</h2><p class="muted">Mencatat ringkasan operasional tanpa menghapus transaksi.</p><div class="card"><b>Hari ini: '+fmtDate(d)+'</b><div class="actions" style="margin-top:10px"><button class="success" onclick="closeToday()" '+(already?'disabled':'')+'>'+(already?'✓ Hari Sudah Ditutup':'Tutup Hari Ini')+'</button></div></div><h3>Riwayat Tutup Hari</h3><div class="tablewrap"><table class="table"><thead><tr><th>Tanggal</th><th>Penjualan</th><th>Modal</th><th>Laba Kotor</th><th>Uang Keluar</th><th>Laba Bersih</th><th>Transaksi</th><th>Ditutup</th></tr></thead><tbody>'+(list.length?list.map(x=>'<tr><td>'+fmtDate(x.tanggal)+'</td><td>'+rupiah(x.omzet)+'</td><td>'+rupiah(x.modal)+'</td><td>'+rupiah(x.labaKotor)+'</td><td>'+rupiah(x.cashOut)+'</td><td>'+(canLabaBersih?rupiah(x.labaBersih):'—')+'</td><td>'+x.transaksi+'</td><td>'+new Date(x.closedAt).toLocaleString('id-ID')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty">Belum ada Tutup Hari.</td></tr>')+'</tbody></table></div></div>'}
@@ -4395,9 +4601,9 @@ if(!LOGIN_ENABLED){
   // ---------- Hutang pelanggan ----------
   window.renderCustomerDebt=function(){if(!hasPermission('Lihat Hutang Pelanggan'))return alert('Anda tidak memiliki izin melihat Hutang Pelanggan.');const f=document.getElementById('custDebtFilter')?.value||'all';const list=db.customerDebts.filter(x=>f==='all'||(f==='paid'?(+x.paid||0)>=(+x.total||0):(+x.paid||0)<(+x.total||0)));const total=list.reduce((a,x)=>a+Math.max(0,(+x.total||0)-(+x.paid||0)),0);app.innerHTML='<div class="card"><h2>Hutang Pelanggan</h2><div class="toolbar"><select id="custDebtFilter" onchange="renderCustomerDebt()"><option value="all">Semua</option><option value="unpaid" '+(f==='unpaid'?'selected':'')+'>Belum Lunas</option><option value="paid" '+(f==='paid'?'selected':'')+'>Lunas</option></select><button onclick="openCustomerDebt()">+ Tambah Hutang</button></div><div class="card"><b>Sisa hutang ditampilkan: '+rupiah(total)+'</b></div><div class="tablewrap"><table class="table"><thead><tr><th>Pelanggan</th><th>Tanggal</th><th>Total</th><th>Terbayar</th><th>Sisa</th><th>Status</th><th>Aksi</th></tr></thead><tbody>'+(list.length?list.map(x=>'<tr><td>'+safe(x.nama)+'<div class="muted">'+safe(x.hp)+'</div></td><td>'+fmtDate(x.tanggal)+'</td><td>'+rupiah(x.total)+'</td><td>'+rupiah(x.paid)+'</td><td>'+rupiah(Math.max(0,x.total-x.paid))+'</td><td>'+(x.paid>=x.total?'<span class="pill">Lunas</span>':'<span class="pill">Belum Lunas</span>')+'</td><td><button class="smallbtn" onclick="openCustomerDebt(\''+x.id+'\')">Edit</button> '+(x.paid<x.total?'<button class="smallbtn success" onclick="payCustomerDebt(\''+x.id+'\')">Bayar</button> ':'')+'<button class="smallbtn danger" onclick="deleteCustomerDebt(\''+x.id+'\')">Hapus</button></td></tr>').join(''):'<tr><td colspan="7" class="empty">Belum ada hutang pelanggan.</td></tr>')+'</tbody></table></div></div>'}
   window.openCustomerDebt=function(id=''){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menambah/edit Hutang Pelanggan.');const x=db.customerDebts.find(a=>a.id===id);sheet.innerHTML='<h2>'+(x?'Edit':'Tambah')+' Hutang Pelanggan</h2><label>Nama Pelanggan</label><input id="cdName" value="'+safe(x?.nama||'')+'"><label>Nomor HP</label><input id="cdHp" type="tel" value="'+safe(x?.hp||'')+'"><label>Nomor Transaksi</label><input id="cdNo" value="'+safe(x?.no||'')+'"><label>Tanggal</label><input id="cdDate" type="date" value="'+safe(x?.tanggal||today())+'"><label>Total Hutang</label>'+moneyField('cdTotal',x?.total||'',false)+'<label>Catatan</label><textarea id="cdNote" rows="2">'+safe(x?.catatan||'')+'</textarea><div class="actions"><button class="gray" onclick="closeM()">Batal</button><button class="success" onclick="saveCustomerDebt(\''+safe(id)+'\')">Simpan</button></div>';modal.classList.add('show')}
-  window.saveCustomerDebt=function(id){const nama=cdName.value.trim(),tanggal=cdDate.value,total=moneyValue(cdTotal.value);if(!nama||!tanggal||total<=0)return alert('Nama, tanggal, dan total hutang wajib diisi.');const old=db.customerDebts.find(x=>x.id===id),d={id:id||newId(),nama,hp:cdHp.value.trim(),no:cdNo.value.trim(),tanggal,total,paid:old?.paid||0,catatan:cdNote.value.trim(),payments:old?.payments||[]};if(d.paid>d.total)return alert('Pembayaran tidak boleh melebihi total hutang.');if(old)Object.assign(old,d);else db.customerDebts.unshift(d);persist(old?'Edit Hutang Pelanggan':'Tambah Hutang Pelanggan',nama+' '+rupiah(total));closeM();renderCustomerDebt();toast('✓ Hutang pelanggan tersimpan')}
-  window.payCustomerDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menambah pembayaran.');const x=db.customerDebts.find(a=>a.id===id);if(!x)return;const s=prompt('Jumlah pembayaran:',String(Math.max(0,x.total-x.paid)));if(s===null)return;const amt=+s||0;if(amt<=0||amt>x.total-x.paid)return alert('Jumlah pembayaran tidak valid.');x.paid=(+x.paid||0)+amt;x.payments=x.payments||[];x.payments.unshift({id:newId(),tanggal:today(),jumlah:amt});persist('Pembayaran Hutang Pelanggan',x.nama+' '+rupiah(amt));renderCustomerDebt();toast('✓ Pembayaran dicatat')}
-  window.deleteCustomerDebt=async function(id){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menghapus Hutang Pelanggan.');const x=db.customerDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang pelanggan ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Pelanggan',deletedAt:new Date().toISOString()});db.customerDebts=db.customerDebts.filter(a=>a.id!==id);await Promise.all([pjForceSyncKey('customerDebts'),pjForceSyncKey('deletedDebtHistory')]);persist('Hapus Hutang Pelanggan',x.nama+' · riwayat pembayaran dipertahankan');renderCustomerDebt();toast('✓ Hutang pelanggan dihapus, riwayat pembayaran tetap tersimpan')}
+  window.saveCustomerDebt=function(id){const nama=cdName.value.trim(),tanggal=cdDate.value,total=moneyValue(cdTotal.value);if(!nama||!tanggal||total<=0)return alert('Nama, tanggal, dan total hutang wajib diisi.');const old=db.customerDebts.find(x=>x.id===id),d={id:id||newId(),nama,hp:cdHp.value.trim(),no:cdNo.value.trim(),tanggal,total,paid:old?.paid||0,catatan:cdNote.value.trim(),payments:old?.payments||[],updatedAt:new Date().toISOString()};if(d.paid>d.total)return alert('Pembayaran tidak boleh melebihi total hutang.');if(old)Object.assign(old,d);else db.customerDebts.unshift(d);persist(old?'Edit Hutang Pelanggan':'Tambah Hutang Pelanggan',nama+' '+rupiah(total));closeM();renderCustomerDebt();toast('✓ Hutang pelanggan tersimpan')}
+  window.payCustomerDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menambah pembayaran.');const x=db.customerDebts.find(a=>a.id===id);if(!x)return;const s=prompt('Jumlah pembayaran:',String(Math.max(0,x.total-x.paid)));if(s===null)return;const amt=+s||0;if(amt<=0||amt>x.total-x.paid)return alert('Jumlah pembayaran tidak valid.');x.paid=(+x.paid||0)+amt;x.payments=x.payments||[];x.payments.unshift({id:newId(),tanggal:today(),jumlah:amt});x.updatedAt=new Date().toISOString();persist('Pembayaran Hutang Pelanggan',x.nama+' '+rupiah(amt));renderCustomerDebt();toast('✓ Pembayaran dicatat')}
+  window.deleteCustomerDebt=async function(id){if(!hasPermission('Tambah/Edit Hutang Pelanggan'))return alert('Anda tidak memiliki izin menghapus Hutang Pelanggan.');const x=db.customerDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang pelanggan ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Pelanggan',deletedAt:new Date().toISOString(),updatedAt:new Date().toISOString()});db.customerDebts=db.customerDebts.filter(a=>a.id!==id);pjMiscTombstoneAdd('customerDebts',id);await Promise.all([pjForceSyncKey('customerDebts'),pjForceSyncKey('deletedDebtHistory'),pjPushMiscTombstone()]);persist('Hapus Hutang Pelanggan',x.nama+' · riwayat pembayaran dipertahankan');renderCustomerDebt();toast('✓ Hutang pelanggan dihapus, riwayat pembayaran tetap tersimpan')}
 
   // ---------- Hutang supplier ----------
   window.renderSupplierDebt=function(){if(!hasPermission('Lihat Hutang Supplier'))return alert('Anda tidak memiliki izin melihat Hutang Sales.');const f=document.getElementById('supDebtFilter')?.value||'all';const list=db.supplierDebts.filter(x=>f==='all'||(f==='paid'?(+x.paid||0)>=(+x.total||0):(+x.paid||0)<(+x.total||0)));const sorted=[...list].sort((a,b)=>{const lunasA=(+a.paid||0)>=(+a.total||0)?1:0,lunasB=(+b.paid||0)>=(+b.total||0)?1:0;return lunasA-lunasB;});const total=list.reduce((a,x)=>a+Math.max(0,(+x.total||0)-(+x.paid||0)),0);const rows=sorted.length?sorted.map((x,i)=>{
@@ -4429,9 +4635,9 @@ if(!LOGIN_ENABLED){
     app.innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Hutang Sales</h2><button type="button" class="gray" onclick="page(\'sales\')">Kembali</button></div><div class="toolbar"><select id="supDebtFilter" onchange="renderSupplierDebt()"><option value="all">Semua</option><option value="unpaid" '+(f==='unpaid'?'selected':'')+'>Belum Lunas</option><option value="paid" '+(f==='paid'?'selected':'')+'>Lunas</option></select><button onclick="openSupplierDebt()">+ Tambah Hutang</button></div><div class="card" style="margin-top:8px"><b>Sisa Hutang: '+rupiah(total)+'</b></div>'+rowsWrap+'</div>'}
   window.openSupplierDebtActions=function(id){const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;const sisa=Math.max(0,(+x.total||0)-(+x.paid||0));sheet.innerHTML='<h2 style="margin:0 0 4px">'+safe(x.nama)+'</h2><div class="muted" style="margin-bottom:12px">Sisa hutang: '+rupiah(sisa)+'</div><div class="actions" style="flex-direction:column;gap:8px"><button onclick="closeM();openSupplierDebt(\''+x.id+'\')">✎ Edit</button>'+(x.paid<x.total?'<button class="success" onclick="closeM();paySupplierDebt(\''+x.id+'\')">💵 Bayar</button>':'')+'<button class="danger" onclick="closeM();deleteSupplierDebt(\''+x.id+'\')">🗑 Hapus</button><button class="gray" onclick="closeM()">Batal</button></div>';modal.classList.add('show')}
   window.openSupplierDebt=function(id=''){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menambah/edit Hutang Sales.');const x=db.supplierDebts.find(a=>a.id===id);sheet.innerHTML='<h2>'+(x?'Edit':'Tambah')+' Hutang Sales</h2><div class="form"><label>Nama Sales</label><input id="sdName" value="'+safe(x?.nama||'')+'"><label>Nomor HP</label><input id="sdHp" type="tel" value="'+safe(x?.hp||'')+'"><label>Nomor Transaksi/Pembelian</label><input id="sdNo" value="'+safe(x?.no||'')+'"><label>Tanggal Hutang</label><input id="sdDate" type="date" value="'+safe(x?.tanggal||today())+'"><label>Total Hutang</label>'+moneyField('sdTotal',x?.total||'',false)+'<label>Jatuh Tempo</label><input id="sdDue" type="date" value="'+safe(x?.jatuhTempo||today())+'"><label>Catatan</label><textarea id="sdNote" rows="2">'+safe(x?.catatan||'')+'</textarea></div><div class="actions"><button class="gray" onclick="closeM()">Kembali</button><button class="success" onclick="saveSupplierDebt(\''+safe(id)+'\')">Simpan</button></div>';modal.classList.add('show')}
-  window.saveSupplierDebt=function(id){const nama=sdName.value.trim(),tanggal=sdDate.value,total=moneyValue(sdTotal.value);if(!nama||!tanggal||total<=0)return alert('Nama, tanggal, dan total hutang wajib diisi.');const old=db.supplierDebts.find(x=>x.id===id),d={id:id||newId(),nama,hp:sdHp.value.trim(),no:sdNo.value.trim(),tanggal,total,jatuhTempo:sdDue.value,paid:old?.paid||0,catatan:sdNote.value.trim(),payments:old?.payments||[]};if(d.paid>d.total)return alert('Pembayaran tidak boleh melebihi total hutang.');if(old)Object.assign(old,d);else db.supplierDebts.unshift(d);persist(old?'Edit Hutang Sales':'Tambah Hutang Sales',nama+' '+rupiah(total));closeM();renderSupplierDebt();toast('✓ Hutang sales tersimpan')}
-  window.paySupplierDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menambah pembayaran.');const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;const s=prompt('Jumlah pembayaran:',String(Math.max(0,x.total-x.paid)));if(s===null)return;const amt=+s||0;if(amt<=0||amt>x.total-x.paid)return alert('Jumlah pembayaran tidak valid.');const saldoToko=(typeof window.cashHeld==='function')?window.cashHeld():Infinity;if(amt>saldoToko)return alert('Pembayaran melebihi uang di toko yang tersedia (Uang di Toko: '+rupiah(saldoToko)+').');x.paid=(+x.paid||0)+amt;x.payments=x.payments||[];x.payments.unshift({id:newId(),tanggal:today(),jumlah:amt});db.pengeluaran=Array.isArray(db.pengeluaran)?db.pengeluaran:[];const now=new Date();const pad=n=>String(n).padStart(2,'0');db.pengeluaran.unshift({id:newId(),timestamp:now.toISOString(),displayTime:`${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,date:today(),karyawan:(session?.name||session?.username||'-'),jumlah:amt,keterangan:'Bayar '+x.nama,jenis:'bayarSales',salesNama:x.nama});persist('Pembayaran Hutang Sales',x.nama+' '+rupiah(amt));renderSupplierDebt();if(typeof window.refreshTxnExpense==='function')window.refreshTxnExpense();toast('✓ Pembayaran dicatat, saldo toko berkurang otomatis')}
-  window.deleteSupplierDebt=async function(id){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menghapus Hutang Sales.');const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang sales ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Supplier',deletedAt:new Date().toISOString()});db.supplierDebts=db.supplierDebts.filter(a=>a.id!==id);await Promise.all([pjForceSyncKey('supplierDebts'),pjForceSyncKey('deletedDebtHistory')]);persist('Hapus Hutang Sales',x.nama+' · riwayat pembayaran dipertahankan');renderSupplierDebt();toast('✓ Hutang sales dihapus, riwayat pembayaran tetap tersimpan')}
+  window.saveSupplierDebt=function(id){const nama=sdName.value.trim(),tanggal=sdDate.value,total=moneyValue(sdTotal.value);if(!nama||!tanggal||total<=0)return alert('Nama, tanggal, dan total hutang wajib diisi.');const old=db.supplierDebts.find(x=>x.id===id),d={id:id||newId(),nama,hp:sdHp.value.trim(),no:sdNo.value.trim(),tanggal,total,jatuhTempo:sdDue.value,paid:old?.paid||0,catatan:sdNote.value.trim(),payments:old?.payments||[],updatedAt:new Date().toISOString()};if(d.paid>d.total)return alert('Pembayaran tidak boleh melebihi total hutang.');if(old)Object.assign(old,d);else db.supplierDebts.unshift(d);persist(old?'Edit Hutang Sales':'Tambah Hutang Sales',nama+' '+rupiah(total));closeM();renderSupplierDebt();toast('✓ Hutang sales tersimpan')}
+  window.paySupplierDebt=function(id){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menambah pembayaran.');const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;const s=prompt('Jumlah pembayaran:',String(Math.max(0,x.total-x.paid)));if(s===null)return;const amt=+s||0;if(amt<=0||amt>x.total-x.paid)return alert('Jumlah pembayaran tidak valid.');const saldoToko=(typeof window.cashHeld==='function')?window.cashHeld():Infinity;if(amt>saldoToko)return alert('Pembayaran melebihi uang di toko yang tersedia (Uang di Toko: '+rupiah(saldoToko)+').');x.paid=(+x.paid||0)+amt;x.payments=x.payments||[];x.payments.unshift({id:newId(),tanggal:today(),jumlah:amt});x.updatedAt=new Date().toISOString();db.pengeluaran=Array.isArray(db.pengeluaran)?db.pengeluaran:[];const now=new Date();const pad=n=>String(n).padStart(2,'0');db.pengeluaran.unshift({id:newId(),timestamp:now.toISOString(),displayTime:`${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,date:today(),karyawan:(session?.name||session?.username||'-'),jumlah:amt,keterangan:'Bayar '+x.nama,jenis:'bayarSales',salesNama:x.nama,updatedAt:now.toISOString()});persist('Pembayaran Hutang Sales',x.nama+' '+rupiah(amt));renderSupplierDebt();if(typeof window.refreshTxnExpense==='function')window.refreshTxnExpense();toast('✓ Pembayaran dicatat, saldo toko berkurang otomatis')}
+  window.deleteSupplierDebt=async function(id){if(!hasPermission('Tambah/Edit Hutang Supplier'))return alert('Anda tidak memiliki izin menghapus Hutang Sales.');const x=db.supplierDebts.find(a=>a.id===id);if(!x)return;if(!confirm('⚠️ Yakin ingin menghapus hutang sales ini? Data hutang dipindahkan ke riwayat penghapusan agar riwayat pembayaran tetap tersimpan.'))return;db.deletedDebtHistory.push({...x,deletedType:'Supplier',deletedAt:new Date().toISOString(),updatedAt:new Date().toISOString()});db.supplierDebts=db.supplierDebts.filter(a=>a.id!==id);pjMiscTombstoneAdd('supplierDebts',id);await Promise.all([pjForceSyncKey('supplierDebts'),pjForceSyncKey('deletedDebtHistory'),pjPushMiscTombstone()]);persist('Hapus Hutang Sales',x.nama+' · riwayat pembayaran dipertahankan');renderSupplierDebt();toast('✓ Hutang sales dihapus, riwayat pembayaran tetap tersimpan')}
 
   // Riwayat Bayar Sales (dipakai bersama oleh Laporan Dana di navigasi Transaksi & navigasi Laporan)
   window.getBayarSalesHistory=function(){db.pengeluaran=Array.isArray(db.pengeluaran)?db.pengeluaran:[];return db.pengeluaran.filter(x=>x&&x.jenis==='bayarSales')};
@@ -4754,6 +4960,7 @@ if(!LOGIN_ENABLED){
       m.paymentDate=m.date;
       m.note=document.getElementById('editNote').value;
       m.user=session?.username||m.user||'-';
+      m.updatedAt=new Date().toISOString();
       db.payments=db.payments||{};
       db.payments[m.id]={payment:newPayment,paymentAmount:newTotal,paymentDate:m.date};
 
@@ -4912,11 +5119,11 @@ if(!LOGIN_ENABLED){
     if(jumlah<=0) return alert('Jumlah setoran harus lebih dari Rp0.');
     if(jumlah>saldo) return alert('Jumlah setoran melebihi uang tunai yang tersedia.');
     const now=bosNow();
-    const record={id:newId(),timestamp:now.iso,displayTime:now.display,karyawan:bosActor(),jumlah,keterangan};
+    const record={id:newId(),timestamp:now.iso,displayTime:now.display,karyawan:bosActor(),jumlah,keterangan,updatedAt:new Date().toISOString()};
     db.setoranBos.unshift(record);
     /* Gunakan Riwayat Aktivitas Karyawan yang sudah ada, bukan sistem riwayat baru. */
     db.activityLog=db.activityLog||[];
-    db.activityLog.unshift({id:newId(),action:'Ambil Dana',details:`Jumlah: ${bosRupiah(jumlah)}${keterangan?' | Keterangan: '+keterangan:''}`,user:bosActor(),dateTime:now.iso});
+    db.activityLog.unshift({id:newId(),action:'Ambil Dana',details:`Jumlah: ${bosRupiah(jumlah)}${keterangan?' | Keterangan: '+keterangan:''}`,user:bosActor(),dateTime:now.iso,updatedAt:new Date().toISOString()});
     if(db.activityLog.length>2000) db.activityLog.length=2000;
     try{ save(); }catch(e){ db.setoranBos.shift(); db.activityLog.shift(); return alert('Ambil Dana gagal disimpan. Penyimpanan perangkat tidak tersedia.'); }
     closeM();
@@ -5094,10 +5301,10 @@ if(!LOGIN_ENABLED){
     if(jumlah>saldo) return alert('Jumlah pengeluaran melebihi uang tunai yang tersedia di toko.');
     if(!keterangan) return alert('Keterangan pengeluaran wajib diisi.');
     const now=pengNow();
-    const record={id:newId(),timestamp:now.iso,displayTime:now.display,date:today(),karyawan:pengActor(),jumlah,keterangan};
+    const record={id:newId(),timestamp:now.iso,displayTime:now.display,date:today(),karyawan:pengActor(),jumlah,keterangan,updatedAt:new Date().toISOString()};
     db.pengeluaran.unshift(record);
     db.activityLog=db.activityLog||[];
-    db.activityLog.unshift({id:newId(),action:'Pengeluaran',details:`Jumlah: ${pengRupiah(jumlah)} | Keterangan: ${keterangan}`,user:pengActor(),dateTime:now.iso});
+    db.activityLog.unshift({id:newId(),action:'Pengeluaran',details:`Jumlah: ${pengRupiah(jumlah)} | Keterangan: ${keterangan}`,user:pengActor(),dateTime:now.iso,updatedAt:new Date().toISOString()});
     if(db.activityLog.length>2000) db.activityLog.length=2000;
     try{ save(); }catch(e){ db.pengeluaran.shift(); db.activityLog.shift(); return alert('Pengeluaran gagal disimpan. Penyimpanan perangkat tidak tersedia.'); }
     closeM();
@@ -5168,7 +5375,7 @@ if(!LOGIN_ENABLED){
   window.openSalePaymentFinal=function(){if(window.__saleEditing){if(!confirm('Ada produk yang sedang diisi tapi belum dimasukkan ke keranjang. Produk itu tidak akan ikut terjual. Lanjut bayar tanpa produk ini?'))return;}if(!cart.length)return alert('Tambahkan minimal satu produk ke keranjang.');for(const x of cart){if(!(Number(x.unitPrice)>0))return alert('Isi Harga Jual Manual untuk semua produk.');const p=product(x.productId);if(!p)return alert('Produk tidak ditemukan: '+x.nama);if(x.qty>stockAt(p,x.loc))return alert('Stok '+locLabel(x.loc)+' untuk '+x.nama+' tidak cukup.');}const t=total();sheet.className='sheet confirm-sale-sheet';sheet.innerHTML=`<h2>Pembayaran Penjualan</h2><div class="confirm-sale-body"><div class="card" style="padding:10px"><b>Ringkasan Transaksi</b>${cart.map(x=>`<div class="confirm-sale-row"><span>${escSafe(x.nama)} × ${x.qty}<br><small>${money(x.unitPrice)} / unit</small></span><b>${money(x.unitPrice*x.qty)}</b></div>`).join('')}<div class="confirm-sale-row"><span>Total Penjualan</span><b>${money(t)}</b></div><div class="confirm-sale-row"><span>Nilai Modal</span><b>${money(cart.reduce((a,x)=>{const p=product(x.productId);return a+(Number(p?.modal)||0)*x.qty},0))}</b></div><div class="confirm-sale-row"><span>Estimasi Laba</span><b>${money(cart.reduce((a,x)=>{const p=product(x.productId);return a+(Number(x.unitPrice)||0)*x.qty-(Number(p?.modal)||0)*x.qty},0))}</b></div></div><div style="margin-top:10px"><label>Metode Pembayaran</label><div class="pj-pay-toggle" id="salePayToggleFinal"><button type="button" class="pj-pay-opt" data-method="TUNAI" onclick="selectSalePaymentFinal('TUNAI')">💵 TUNAI</button><button type="button" class="pj-pay-opt" data-method="TRANSFER" onclick="selectSalePaymentFinal('TRANSFER')">💳 TRANSFER</button></div><input type="hidden" id="salePaymentMethodFinal" value=""><div id="salePayError" class="dangerText" style="font-size:12px;margin-top:6px;display:none">Pilih Tunai atau Transfer dulu.</div><div class="card" style="padding:10px;margin-top:8px"><div class="muted">Pembayaran</div><div style="font-size:20px;font-weight:900">Sesuai Total Penjualan</div></div></div></div><div class="confirm-sale-actions"><button type="button" class="gray" onclick="backToSaleCart()">Kembali</button><button type="button" class="success" id="saveSaleFinalBtn" onclick="saveSaleCartFinal()" disabled style="opacity:.5">SIMPAN TRANSAKSI</button></div>`;modal.classList.add('show');updateSalePaymentFinal();};
   window.selectSalePaymentFinal=function(method){const input=document.getElementById('salePaymentMethodFinal');if(input)input.value=method;document.querySelectorAll('#salePayToggleFinal .pj-pay-opt').forEach(b=>b.classList.toggle('active',b.dataset.method===method));const err=document.getElementById('salePayError');if(err)err.style.display='none';const btn=document.getElementById('saveSaleFinalBtn');if(btn){btn.disabled=false;btn.style.opacity='1'}updateSalePaymentFinal();};
   window.updateSalePaymentFinal=function(){const ch=document.getElementById('saleChangeFinal');if(ch)ch.textContent='Rp 0';};
-  window.saveSaleCartFinal=function(){const method=document.getElementById('salePaymentMethodFinal')?.value||'';if(!method){const err=document.getElementById('salePayError');if(err)err.style.display='block';return}const btn=document.getElementById('saveSaleFinalBtn');if(window.__savingSaleFinal)return;window.__savingSaleFinal=true;if(btn){btn.disabled=true;btn.textContent='MENYIMPAN...'};try{const t=total(),cash=t;for(const x of cart){const p=product(x.productId);if(!p)throw new Error('Produk tidak ditemukan: '+x.nama);if(x.qty>stockAt(p,x.loc))throw new Error('Stok '+locLabel(x.loc)+' untuk '+x.nama+' tidak cukup.');}const oldP=JSON.stringify(db.products),oldM=JSON.stringify(db.moves),no=nextTransactionNo(),date=today(),created=[];for(const x of cart){const p=product(x.productId),modalTotal=(Number(p.modal)||0)*x.qty,itemTotal=(Number(x.unitPrice)||0)*x.qty;setStockAt(p,x.loc,stockAt(p,x.loc)-x.qty);created.push({id:newId(),no,type:'Penjualan Toko',product:p.nama,productId:p.id,qty:x.qty,date,note:'',loc:x.loc,unitPrice:Number(x.unitPrice)||0,discount:0,total:itemTotal,laba:itemTotal-modalTotal,modalTotal,payment:method,paymentAmount:method==='TUNAI'?cash:t,user:session?.username||'-',saleMode:'MANUAL'});}db.moves.unshift(...created);pushSaleNotification(created);toast('✓ Penjualan berhasil disimpan');closeM();cart=[];setTimeout(()=>page('sales'),120);save().then(ok=>{ if(ok) toast('✓ Penjualan tersimpan & online'); });}catch(e){try{db.products=JSON.parse(oldP);db.moves=JSON.parse(oldM);localStorage.setItem(KEY,JSON.stringify(db));}catch(_){ } alert(e.message||'Transaksi gagal disimpan.');if(btn){btn.disabled=false;btn.textContent='SIMPAN TRANSAKSI'}}finally{window.__savingSaleFinal=false;}};
+  window.saveSaleCartFinal=function(){const method=document.getElementById('salePaymentMethodFinal')?.value||'';if(!method){const err=document.getElementById('salePayError');if(err)err.style.display='block';return}const btn=document.getElementById('saveSaleFinalBtn');if(window.__savingSaleFinal)return;window.__savingSaleFinal=true;if(btn){btn.disabled=true;btn.textContent='MENYIMPAN...'};try{const t=total(),cash=t;for(const x of cart){const p=product(x.productId);if(!p)throw new Error('Produk tidak ditemukan: '+x.nama);if(x.qty>stockAt(p,x.loc))throw new Error('Stok '+locLabel(x.loc)+' untuk '+x.nama+' tidak cukup.');}const oldP=JSON.stringify(db.products),oldM=JSON.stringify(db.moves),no=nextTransactionNo(),date=today(),created=[];for(const x of cart){const p=product(x.productId),modalTotal=(Number(p.modal)||0)*x.qty,itemTotal=(Number(x.unitPrice)||0)*x.qty;setStockAt(p,x.loc,stockAt(p,x.loc)-x.qty);created.push({id:newId(),no,type:'Penjualan Toko',product:p.nama,productId:p.id,qty:x.qty,date,note:'',loc:x.loc,unitPrice:Number(x.unitPrice)||0,discount:0,total:itemTotal,laba:itemTotal-modalTotal,modalTotal,payment:method,paymentAmount:method==='TUNAI'?cash:t,user:session?.username||'-',saleMode:'MANUAL',updatedAt:new Date().toISOString()});}db.moves.unshift(...created);pushSaleNotification(created);toast('✓ Penjualan berhasil disimpan');closeM();cart=[];setTimeout(()=>page('sales'),120);save().then(ok=>{ if(ok) toast('✓ Penjualan tersimpan & online'); });}catch(e){try{db.products=JSON.parse(oldP);db.moves=JSON.parse(oldM);localStorage.setItem(KEY,JSON.stringify(db));}catch(_){ } alert(e.message||'Transaksi gagal disimpan.');if(btn){btn.disabled=false;btn.textContent='SIMPAN TRANSAKSI'}}finally{window.__savingSaleFinal=false;}};
   window.renderSalesReport=function(){cart=[];app.innerHTML=`<style id="pj-sales-nav-modern">
 .pj-sales-page{padding:2px 0 24px;max-width:720px;margin:auto}.pj-sales-hero{background:linear-gradient(135deg,#102a56,#102a56);color:#ffffff;border-radius:18px;padding:18px 16px;margin-bottom:12px;box-shadow:0 8px 22px rgba(16,42,86,.16)}.pj-sales-hero h2{margin:0;font-size:20px}.pj-sales-hero p{margin:5px 0 0;font-size:11px;color:rgba(255,255,255,.75)}.pj-sales-menu-title{font-size:11px;font-weight:900;letter-spacing:.7px;color:#102a56;margin:14px 2px 8px}.pj-sales-actions{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:8px}.pj-sales-action{border:1px solid #dce5f2!important;background:#ffffff!important;color:#14284b!important;min-height:78px!important;border-radius:14px!important;padding:10px 7px!important;box-shadow:0 2px 8px rgba(20,40,75,.05);display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px}.pj-sales-action strong{font-size:13px}.pj-sales-action span{font-size:9px;color:#718096;font-weight:600}.pj-sales-action.jual{background:#102a56!important;color:#ffffff!important;border-color:#102a56!important}.pj-sales-action.jual span{color:rgba(255,255,255,.72)}.pj-sales-action:active{transform:scale(.98)}.pj-sales-history{margin-top:14px!important;border-radius:16px!important;padding:13px!important}.pj-sales-history-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.pj-sales-history-head b{font-size:13px}.pj-sales-history-head span{font-size:9px;color:#718096}.pj-sales-filter{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:9px}.pj-sales-filter input{min-width:0}.pj-sales-filter button{padding:10px 12px}.pj-sales-summary .stats{gap:7px}.pj-sales-summary .card{padding:10px;border-radius:11px}.pj-sales-summary .label{font-size:9px}.pj-sales-summary .value{font-size:13px}@media(max-width:380px){.pj-sales-actions{gap:6px}.pj-sales-action{min-height:72px!important}.pj-sales-action strong{font-size:12px}.pj-sales-action span{font-size:8px}.pj-sales-history{padding:10px!important}}
 </style><div class="pj-sales-page"><div class="pj-sales-menu-title">RIWAYAT PENJUALAN</div><div class="pj-sales-actions sales-menu-actions sales-menu-actions-fixed"><button type="button" class="pj-sales-action" onclick="page('restaurantUsage')"><span class="pj-sales-icon">🍽️</span><strong>Restoran</strong><span>Pemakaian barang</span></button><button type="button" class="pj-sales-action jual" onclick="openSaleCart()"><span class="pj-sales-icon">🛒</span><strong>Jual Produk</strong><span>Penjualan</span></button></div><div class="card pj-sales-history"><div class="pj-sales-history-head"><b>Riwayat Penjualan</b><span>Data transaksi</span></div><div class="pj-sales-filter"><input id="salesDateFinal" type="date" value="${today()}" onchange="refreshSalesReportFinal()"><button class="gray" onclick="salesAllFinal()">Semua</button></div><div id="salesSummaryFinal" class="pj-sales-summary"></div><div class="tablewrap" style="margin-top:8px"><table class="table"><thead><tr><th>Tanggal</th><th>Barang</th><th>Qty</th><th>Harga Jual</th><th>Modal</th><th>Omzet</th><th>Laba</th><th>Pembayaran</th><th>Lokasi</th></tr></thead><tbody id="salesRowsFinal"></tbody></table></div></div></div>`;refreshSalesReportFinal();};
@@ -5329,9 +5536,10 @@ if(!LOGIN_ENABLED){
     const oldP=JSON.stringify(db.products||[]), oldM=JSON.stringify(db.moves||[]);
     try{
       setStockAt(p,loc,stockAt(p,loc)+q);
-      const corr={id:newId(),no:m.no,type:`Koreksi ${t}`,product:m.product,productId:m.productId,foto:m.foto||'',kategori:m.kategori||'',qty:-q,satuan:m.satuan||'pcs',date:today(),note:`Koreksi dari ${t} ${m.no||m.id}`,loc,unitPrice:0,discount:0,total:0,laba:0,modalTotal:-(Number(m.modalTotal)||0),payment:'',paymentAmount:0,user:session?.username||'-',correctionOf:m.id};
+      const corr={id:newId(),no:m.no,type:`Koreksi ${t}`,product:m.product,productId:m.productId,foto:m.foto||'',kategori:m.kategori||'',qty:-q,satuan:m.satuan||'pcs',date:today(),note:`Koreksi dari ${t} ${m.no||m.id}`,loc,unitPrice:0,discount:0,total:0,laba:0,modalTotal:-(Number(m.modalTotal)||0),payment:'',paymentAmount:0,user:session?.username||'-',correctionOf:m.id,updatedAt:new Date().toISOString()};
       db.moves.unshift(corr);
       m.cancelled=true;
+      m.updatedAt=new Date().toISOString();
       m.cancelledAt=new Date().toISOString();
       m.cancelledBy=session?.username||'-';
       if(typeof logActivity==='function')logActivity('Koreksi Transaksi',(m.no||m.id||'')+' '+(m.product||'')+' ['+t+']');
@@ -6141,7 +6349,7 @@ if(!LOGIN_ENABLED){
         const modalTotal=(Number(p.modal)||0)*q;
         setStockAt(p,loc,available-q);
         db.moves=db.moves||[];
-        db.moves.unshift({id:newId(),type:'Rusak',product:String(p.nama||''),productId:p.id??'',foto:p.foto||'',kategori:p.kategori||p.category||'',qty:q,satuan,date,note,loc,unitPrice:0,discount:0,total:0,laba:0,modalTotal:0,kerugianTotal:modalTotal,payment:'',paymentAmount:0,user:session?.username||'-'});
+        db.moves.unshift({id:newId(),type:'Rusak',product:String(p.nama||''),productId:p.id??'',foto:p.foto||'',kategori:p.kategori||p.category||'',qty:q,satuan,date,note,loc,unitPrice:0,discount:0,total:0,laba:0,modalTotal:0,kerugianTotal:modalTotal,payment:'',paymentAmount:0,user:session?.username||'-',updatedAt:new Date().toISOString()});
         logActivity('Barang Rusak',String(p.nama||'')+' : '+q+' '+satuan+' · '+loc);
         save();
         toast('✓ Barang Rusak berhasil disimpan');
@@ -6786,8 +6994,10 @@ if(!LOGIN_ENABLED){
     if(!confirm('⚠️ Yakin ingin menghapus SEMUA riwayat pengeluaran? Total pengeluaran & Uang di Toko tidak akan berubah, hanya daftar riwayatnya yang dikosongkan. Tindakan ini tidak bisa dibatalkan.'))return;
     const totalDihapus=db.pengeluaran.reduce((sum,x)=>sum+(Number(x.jumlah)||0),0);
     db.pengeluaranArsipTotal=(Number(db.pengeluaranArsipTotal)||0)+totalDihapus;
+    const removedIds=db.pengeluaran.map(x=>x.id);
     db.pengeluaran=[];
-    await pjForceSyncKey('pengeluaran');
+    removedIds.forEach(id=>pjMiscTombstoneAdd('pengeluaran',id));
+    await Promise.all([pjForceSyncKey('pengeluaran'),pjPushMiscTombstone()]);
     logActivity('Hapus Semua Pengeluaran','Semua riwayat pengeluaran dihapus, total pengeluaran tetap tersimpan');
     save();
     refreshExpenseReport();
@@ -10761,9 +10971,13 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
     const totalBayarSales=bayarSales.reduce((s,x)=>s+(Number(x.jumlah)||0),0);
     db.setoranArsipTotal=(Number(db.setoranArsipTotal)||0)+totalSetoran;
     db.pengeluaranArsipTotal=(Number(db.pengeluaranArsipTotal)||0)+totalBayarSales;
+    const removedSetoranIds=db.setoranBos.map(x=>x.id);
+    const removedBayarSalesIds=bayarSales.map(x=>x.id);
     db.setoranBos=[];
     db.pengeluaran=db.pengeluaran.filter(x=>!(x&&x.jenis==='bayarSales'));
-    await Promise.all([pjForceSyncKey('setoranBos'),pjForceSyncKey('pengeluaran')]);
+    removedSetoranIds.forEach(id=>pjMiscTombstoneAdd('setoranBos',id));
+    removedBayarSalesIds.forEach(id=>pjMiscTombstoneAdd('pengeluaran',id));
+    await Promise.all([pjForceSyncKey('setoranBos'),pjForceSyncKey('pengeluaran'),pjPushMiscTombstone()]);
     if(typeof logActivity==='function')logActivity('Hapus Riwayat Dana','Semua riwayat Ambil Dana & Bayar Sales dihapus, saldo tidak berubah');
     save();
     if(typeof window.refreshDanaReport==='function')window.refreshDanaReport();
@@ -10795,6 +11009,8 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
     if(!confirm('⚠️ Yakin ingin menghapus SEMUA riwayat restoran? Tindakan ini tidak bisa dibatalkan.'))return;
     db.moves=(db.moves||[]).filter(x=>!String(x.type||'').toLowerCase().includes('restoran'));
     await pjRemoteDeleteMany('putrajaya_moves',removed.map(x=>x.id));
+    removed.forEach(x=>pjTombstoneAdd('deletedMoveIds',x.id));
+    pjPushTombstone('deletedMoveIds');
     if(typeof logActivity==='function')logActivity('Hapus Riwayat Restoran','Semua riwayat transaksi restoran dihapus');
     save();
     if(typeof window.refreshRestoReport==='function')window.refreshRestoReport();
@@ -10947,6 +11163,8 @@ html body #modal .sheet .pj-notif-detail-wrap ~ .card .detail-line b{
     db.salesTunaiArsipTotal=(Number(db.salesTunaiArsipTotal)||0)+tunaiDihapus;
     db.moves=(db.moves||[]).filter(x=>x.type!=='Penjualan Toko');
     await pjRemoteDeleteMany('putrajaya_moves',removed.map(x=>x.id));
+    removed.forEach(x=>pjTombstoneAdd('deletedMoveIds',x.id));
+    pjPushTombstone('deletedMoveIds');
     if(typeof logActivity==='function')logActivity('Hapus Riwayat Penjualan','Semua riwayat penjualan toko dihapus, saldo kas & stok tetap aman');
     save();
     refreshReport();
