@@ -14,6 +14,7 @@ on:
       - 'icon.png'
       - 'icon-192.png'
       - 'icon-512.png'
+      - 'splash.png'
 
 permissions:
   contents: write
@@ -57,17 +58,37 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Prepare icon source
+      - name: Prepare icon and splash source
         shell: bash
         run: |
           mkdir -p resources
           cp icon-512.png resources/icon.png
+          cp splash.png resources/splash.png
+          cp splash.png resources/splash-dark.png
 
       - name: Install capacitor-assets
         run: npm install @capacitor/assets --save-dev
 
-      - name: Generate app icons
-        run: npx capacitor-assets generate --android --icon-only
+      - name: Generate app icons and splash screen
+        run: npx capacitor-assets generate --android
+
+      - name: Make splash full-screen (crop to fill, no borders)
+        shell: bash
+        run: |
+          pip install --quiet pillow
+          python3 << 'EOF'
+          import glob
+          from PIL import Image, ImageOps
+
+          source = Image.open("splash.png").convert("RGB")
+
+          targets = glob.glob("android/app/src/main/res/drawable*/splash.png")
+          for path in targets:
+              w, h = Image.open(path).size
+              fitted = ImageOps.fit(source, (w, h), Image.LANCZOS, centering=(0.5, 0.5))
+              fitted.save(path)
+              print(f"{path}: {w}x{h} filled")
+          EOF
 
       - name: Sync Capacitor
         run: npx cap sync android
