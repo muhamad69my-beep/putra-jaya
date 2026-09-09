@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html lang="id">
+<html lang="id" style="background:#ffffff">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
@@ -9,7 +9,7 @@
 <link href="./icon-192.png" rel="icon" sizes="192x192" type="image/png"/>
 <link href="./icon-512.png" rel="icon" sizes="512x512" type="image/png"/>
 <link href="./icon.png" rel="apple-touch-icon"/>
-<meta content="#1976F3" name="theme-color"/>
+<meta content="#ffffff" name="theme-color"/>
 <style id="pj-startup-render-gate">
 /* PUTRAJAYA 2 — STARTUP RENDER GATE
    Mencegah UI master lama terlihat sesaat sebelum UI final selesai dipasang.
@@ -19,13 +19,12 @@ html.pj-startup-pending body #app,
 html.pj-startup-pending body #mainNav,
 html.pj-startup-pending body #bottomNav,
 html.pj-startup-pending body .putra-footer{visibility:hidden!important}
-html.pj-startup-pending body{background:#1976F3}
-#pjStartupLoader{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1976F3;gap:16px;opacity:1;visibility:visible;transition:opacity .9s ease,visibility 0s linear 0s}
-html.pj-startup-fading #pjStartupLoader{opacity:0;visibility:hidden;transition:opacity .9s ease,visibility 0s linear .9s}
+html.pj-startup-pending body{background:#ffffff}
+#pjStartupLoader{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#ffffff;gap:16px}
 html.pj-startup-ready #pjStartupLoader{display:none}
-#pjStartupLoader .pj-load-title{color:#ffffff;font-family:Arial,sans-serif;font-weight:800;font-size:19px;letter-spacing:.02em}
-#pjStartupLoader .pj-load-sub{color:#ffffff99;font-family:Arial,sans-serif;font-size:13px}
-#pjStartupLoader .pj-spinner{display:none}
+#pjStartupLoader .pj-load-title{color:#102A56;font-family:Arial,sans-serif;font-weight:800;font-size:19px;letter-spacing:.02em}
+#pjStartupLoader .pj-load-sub{color:#718096;font-family:Arial,sans-serif;font-size:13px}
+#pjStartupLoader .pj-spinner{width:46px;height:46px;border-radius:50%;border:3px solid #EAF3FF;border-top-color:#1976F3;animation:pjspin .8s linear infinite}
 @keyframes pjspin{to{transform:rotate(360deg)}}
 #pjOfflineBanner{position:fixed;inset:0;z-index:9998;background:linear-gradient(180deg,#102a56,#14284b);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:Arial,sans-serif;text-align:center;padding:20px}
 #pjOfflineBanner.show{display:flex}
@@ -40,11 +39,7 @@ html.pj-startup-ready #pjStartupLoader{display:none}
 document.documentElement.classList.add('pj-startup-pending');
 window.__pjRevealStartup=function(){
   document.documentElement.classList.remove('pj-startup-pending');
-  document.documentElement.classList.add('pj-startup-fading');
-  window.setTimeout(function(){
-    document.documentElement.classList.remove('pj-startup-fading');
-    document.documentElement.classList.add('pj-startup-ready');
-  },900);
+  document.documentElement.classList.add('pj-startup-ready');
 };
 </script>
 <style>
@@ -1359,7 +1354,7 @@ html body #app .pj-omset-payment .value{
 </style>
 </head>
 <body>
-<div id="pjStartupLoader"><div class="pj-load-title">PUTRAJAYA 2</div><div class="pj-load-sub">Menyiapkan aplikasi…</div></div>
+<div id="pjStartupLoader"><div class="pj-spinner"></div><div class="pj-load-title">PUTRAJAYA 2</div><div class="pj-load-sub">Memuat aplikasi…</div></div>
 <div id="pjOfflineBanner">
   <div class="pj-off-icon"><svg fill="none" stroke="#102a56" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"></path></svg></div>
   <svg class="pj-off-wifi" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"></line><path d="M8.5 16.5a5 5 0 0 1 7 0"></path><path d="M5 12.9a10 10 0 0 1 5.17-2.69"></path><path d="M19 12.9a10 10 0 0 0-2.7-2.16"></path><path d="M2 8.8a15 15 0 0 1 4.17-2.65"></path><path d="M22 8.8a15 15 0 0 0-11.29-3.75"></path><line x1="12" x2="12.01" y1="20" y2="20"></line></svg>
