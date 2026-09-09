@@ -1,115 +1,56 @@
-name: Build APK
-
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/build-apk.yml'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'capacitor.config.json'
-      - 'manifest.json'
-      - 'sw.js'
-      - 'index.html'
-      - 'icon.png'
-      - 'icon-192.png'
-      - 'icon-512.png'
-      - 'splash.png'
-
-permissions:
-  contents: write
-
-concurrency:
-  group: putra-jaya-apk-build
-  cancel-in-progress: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Prepare web files
-        shell: bash
-        run: |
-          rm -rf www
-          mkdir -p www
-          cp index.html manifest.json sw.js www/
-          cp icon.png icon-192.png icon-512.png www/
-          test -s www/index.html
-          test -s www/manifest.json
-
-      - name: Add Android platform
+- name: Add Android platform
         run: npx cap add android
 
-      - name: Prepare icon and splash source
+      - name: Add camera permission to manifest
         shell: bash
         run: |
-          mkdir -p resources
-          cp icon-512.png resources/icon.png
-          cp splash.png resources/splash.png
-          cp splash.png resources/splash-dark.png
+          MANIFEST=$(find android -name "AndroidManifest.xml" -path "*main*")
+          sed -i '/<\/manifest>/i\    <uses-permission android:name="android.permission.CAMERA" />' "$MANIFEST"
+          cat "$MANIFEST"
 
-      - name: Install capacitor-assets
-        run: npm install @capacitor/assets --save-dev
-
-      - name: Generate app icons and splash screen
-        run: npx capacitor-assets generate --android
-
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Build debug APK
-        working-directory: android
+      - name: Patch MainActivity to grant WebView camera permission
         shell: bash
         run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          MAINACT=$(find android -name "MainActivity.java")
+          python3 - "$MAINACT" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
 
-      - name: Locate APK
-        if: always()
-        shell: bash
-        run: find android/app/build/outputs -type f -iname '*.apk' -print 2>/dev/null || true
+imports = """import android.Manifest;
+import android.webkit.WebChromeClient;
+import android.webkit.PermissionRequest;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import android.content.pm.PackageManager;
+"""
+if "PermissionRequest" not in content:
+    content = content.replace(
+        "import com.getcapacitor.BridgeActivity;",
+        "import com.getcapacitor.BridgeActivity;\n" + imports
+    )
 
-      - name: Prepare APK
-        shell: bash
-        run: |
-          APK="android/app/build/outputs/apk/debug/app-debug.apk"
-          test -f "$APK"
-          mkdir -p apk-output
-          cp "$APK" apk-output/putra-jaya.apk
-          ls -lh apk-output/putra-jaya.apk
+if "onPermissionRequest" not in content:
+    override = """
+    @Override
+    public void onCreate(android.os.Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 100);
+        }
+        this.bridge.getWebView().setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(() -> request.grant(request.getResources()));
+            }
+        });
+    }
+"""
+    idx = content.rfind("}")
+    content = content[:idx] + override + "\n}"
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: putra-jaya-apk
-          path: apk-output/putra-jaya.apk
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: apk-${{ github.run_number }}
-          name: PUTRAJAYA APK ${{ github.run_number }}
-          body: |
-            APK PUTRAJAYA hasil build otomatis menggunakan Capacitor.
-          files: apk-output/putra-jaya.apk
-          fail_on_unmatched_files: true
+with open(path, "w") as f:
+    f.write(content)
+PYEOF
+          cat "$MAINACT"
